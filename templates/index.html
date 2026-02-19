@@ -1,0 +1,1991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>OUTBREAK RESPONSE — Viral Containment Simulation</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ── RESET & BASE ── */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:        #050A14;
+    --bg2:       #0D1A2A;
+    --bg3:       #0A1520;
+    --panel:     #091322;
+    --border:    #1A3050;
+    --green:     #00FF88;
+    --green-dim: #00A855;
+    --cyan:      #00D4FF;
+    --red:       #FF3434;
+    --red-dim:   #8B0000;
+    --yellow:    #FFB800;
+    --purple:    #9B5DE5;
+    --text:      #C8DCF0;
+    --text-dim:  #5A7A99;
+    --mono:      'Share Tech Mono', monospace;
+    --display:   'Orbitron', sans-serif;
+    --body:      'Rajdhani', sans-serif;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    font-size: 16px;
+    overflow-x: hidden;
+  }
+
+  /* Scanline overlay */
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.08) 3px,
+      rgba(0,0,0,0.08) 4px
+    );
+    pointer-events: none;
+    z-index: 9999;
+  }
+
+  /* Grid background */
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background-image:
+      linear-gradient(rgba(0,212,255,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,212,255,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* ── SCREEN SYSTEM ── */
+  .screen {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    overflow-y: auto;
+  }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* ── UTILITY ── */
+  .mono { font-family: var(--mono); }
+  .display { font-family: var(--display); }
+  .glow-green { text-shadow: 0 0 12px var(--green), 0 0 24px rgba(0,255,136,0.4); }
+  .glow-red { text-shadow: 0 0 12px var(--red), 0 0 24px rgba(255,52,52,0.4); }
+  .glow-cyan { text-shadow: 0 0 12px var(--cyan), 0 0 24px rgba(0,212,255,0.4); }
+
+  .corner-cut {
+    clip-path: polygon(12px 0%, 100% 0%, 100% calc(100% - 12px), calc(100% - 12px) 100%, 0% 100%, 0% 12px);
+  }
+
+  /* ── BUTTONS ── */
+  .btn {
+    font-family: var(--display);
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    padding: 12px 28px;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+  .btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: rgba(255,255,255,0.1);
+    transform: translateX(-100%);
+    transition: transform 0.3s;
+  }
+  .btn:hover::before { transform: translateX(0); }
+
+  .btn-primary {
+    background: transparent;
+    color: var(--green);
+    border: 1px solid var(--green);
+    clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+    box-shadow: 0 0 20px rgba(0,255,136,0.2), inset 0 0 20px rgba(0,255,136,0.05);
+  }
+  .btn-primary:hover {
+    background: rgba(0,255,136,0.1);
+    box-shadow: 0 0 30px rgba(0,255,136,0.4), inset 0 0 20px rgba(0,255,136,0.1);
+  }
+
+  .btn-danger {
+    background: transparent;
+    color: var(--red);
+    border: 1px solid var(--red);
+    clip-path: polygon(8px 0%, 100% 0%, calc(100% - 8px) 100%, 0% 100%);
+    box-shadow: 0 0 20px rgba(255,52,52,0.2);
+  }
+
+  /* ── PANELS ── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    position: relative;
+  }
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  }
+  .panel-title {
+    font-family: var(--display);
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    color: var(--cyan);
+    padding: 10px 14px 8px;
+    border-bottom: 1px solid var(--border);
+    text-transform: uppercase;
+  }
+
+  /* ── PROGRESS BAR ── */
+  .progress-track {
+    height: 6px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    position: relative;
+  }
+  .progress-fill {
+    height: 100%;
+    transition: width 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+  }
+  .progress-fill::after {
+    content: '';
+    position: absolute; right: 0; top: 0; bottom: 0;
+    width: 4px;
+    background: rgba(255,255,255,0.6);
+    box-shadow: 0 0 8px currentColor;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    49% { opacity: 1; }
+    50% { opacity: 0; }
+    99% { opacity: 0; }
+  }
+  @keyframes slideInUp {
+    from { transform: translateY(30px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+  }
+  @keyframes slideInRight {
+    from { transform: translateX(-20px); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+  }
+  @keyframes glitch {
+    0%, 100% { clip-path: none; transform: none; }
+    10% { clip-path: inset(20% 0 30% 0); transform: translateX(-4px); }
+    20% { clip-path: inset(50% 0 20% 0); transform: translateX(4px); }
+    30% { clip-path: none; transform: none; }
+  }
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes scanDown {
+    0% { top: -5%; }
+    100% { top: 105%; }
+  }
+  @keyframes alertFlash {
+    0%, 100% { background: transparent; }
+    50% { background: rgba(255,52,52,0.05); }
+  }
+
+  /* ════════════════════════════
+     SCREEN: LANDING
+  ════════════════════════════ */
+  #screen-landing {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: radial-gradient(ellipse 80% 80% at 50% 50%, #0A1830 0%, #050A14 100%);
+  }
+
+  .landing-content {
+    max-width: 700px;
+    padding: 40px;
+    animation: fadeIn 1s ease;
+  }
+
+  .biohazard-icon {
+    font-size: 5rem;
+    color: var(--green);
+    text-shadow: 0 0 30px var(--green), 0 0 60px rgba(0,255,136,0.3);
+    animation: pulse 2s ease-in-out infinite;
+    display: block;
+    margin-bottom: 20px;
+  }
+
+  .landing-title {
+    font-family: var(--display);
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    color: var(--green);
+    text-shadow: 0 0 20px rgba(0,255,136,0.5);
+    line-height: 1.1;
+    margin-bottom: 8px;
+  }
+
+  .landing-sub {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--cyan);
+    letter-spacing: 0.3em;
+    text-transform: uppercase;
+    margin-bottom: 24px;
+  }
+
+  .landing-divider {
+    width: 200px;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--green-dim), transparent);
+    margin: 20px auto;
+  }
+
+  .landing-desc {
+    font-size: 1.05rem;
+    color: var(--text-dim);
+    line-height: 1.7;
+    margin-bottom: 32px;
+    font-weight: 300;
+  }
+
+  .landing-stats {
+    display: flex;
+    justify-content: center;
+    gap: 40px;
+    margin-bottom: 40px;
+  }
+
+  .stat-item {
+    text-align: center;
+  }
+  .stat-value {
+    font-family: var(--display);
+    font-size: 1.8rem;
+    color: var(--green);
+    display: block;
+  }
+  .stat-label {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+  }
+
+  .warning-bar {
+    background: rgba(255,184,0,0.1);
+    border: 1px solid rgba(255,184,0,0.3);
+    padding: 10px 16px;
+    margin-bottom: 28px;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--yellow);
+    letter-spacing: 0.1em;
+    animation: alertFlash 2s ease infinite;
+  }
+
+  /* ════════════════════════════
+     SCREEN: LOADING
+  ════════════════════════════ */
+  #screen-loading {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+  }
+
+  .loading-spinner {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 28px;
+    position: relative;
+  }
+
+  .spinner-ring {
+    position: absolute; inset: 0;
+    border-radius: 50%;
+    border: 2px solid transparent;
+  }
+  .spinner-ring:nth-child(1) {
+    border-top-color: var(--green);
+    animation: spin 1s linear infinite;
+  }
+  .spinner-ring:nth-child(2) {
+    inset: 10px;
+    border-right-color: var(--cyan);
+    animation: spin 1.5s linear infinite reverse;
+  }
+  .spinner-ring:nth-child(3) {
+    inset: 22px;
+    border-bottom-color: var(--green);
+    animation: spin 2s linear infinite;
+  }
+
+  .loading-status {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--green);
+    letter-spacing: 0.1em;
+    animation: blink 1s step-end infinite;
+  }
+
+  .loading-log {
+    margin-top: 24px;
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-align: left;
+    max-width: 400px;
+  }
+  .loading-log .log-line {
+    margin-bottom: 4px;
+    animation: slideInRight 0.3s ease;
+  }
+
+  /* ════════════════════════════
+     SCREEN: BRIEFING
+  ════════════════════════════ */
+  #screen-briefing {
+    justify-content: center;
+    align-items: center;
+    padding: 20px;
+  }
+
+  .briefing-card {
+    max-width: 800px;
+    width: 100%;
+    border: 1px solid var(--red);
+    background: var(--panel);
+    padding: 0;
+    animation: slideInUp 0.6s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .briefing-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--red), var(--yellow), var(--red));
+    animation: alertFlash 1s ease infinite;
+  }
+
+  .briefing-header {
+    background: rgba(255,52,52,0.1);
+    border-bottom: 1px solid rgba(255,52,52,0.3);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .alert-badge {
+    background: var(--red);
+    color: white;
+    font-family: var(--display);
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    padding: 4px 10px;
+    animation: blink 1s step-end infinite;
+  }
+
+  .briefing-body {
+    padding: 28px;
+  }
+
+  .virus-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+
+  .virus-stat {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 12px 16px;
+  }
+  .virus-stat-label {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .virus-stat-value {
+    font-family: var(--display);
+    font-size: 0.95rem;
+    color: var(--cyan);
+  }
+
+  .symptoms-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 24px;
+  }
+  .symptom-tag {
+    background: rgba(255,52,52,0.1);
+    border: 1px solid rgba(255,52,52,0.3);
+    color: var(--red);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    padding: 4px 10px;
+    letter-spacing: 0.08em;
+  }
+
+  .scenario-text {
+    background: rgba(0,212,255,0.05);
+    border-left: 3px solid var(--cyan);
+    padding: 16px;
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--text);
+    margin-bottom: 16px;
+  }
+
+  .briefing-mission {
+    background: rgba(0,255,136,0.05);
+    border-left: 3px solid var(--green);
+    padding: 16px;
+    font-size: 1rem;
+    line-height: 1.7;
+    color: var(--green);
+    margin-bottom: 28px;
+  }
+
+  /* ════════════════════════════
+     SCREEN: GAME
+  ════════════════════════════ */
+  #screen-game {
+    flex-direction: column;
+    min-height: 100vh;
+    padding: 0;
+  }
+
+  /* --- Top Header Bar --- */
+  .game-header {
+    background: var(--panel);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+
+  .game-logo {
+    font-family: var(--display);
+    font-size: 0.85rem;
+    font-weight: 900;
+    letter-spacing: 0.15em;
+    color: var(--green);
+    text-shadow: 0 0 10px rgba(0,255,136,0.4);
+    flex-shrink: 0;
+  }
+
+  .header-divider {
+    width: 1px;
+    height: 30px;
+    background: var(--border);
+  }
+
+  .day-indicator {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .day-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+  }
+  .day-value {
+    font-family: var(--display);
+    font-size: 1.1rem;
+    color: var(--cyan);
+  }
+
+  .header-spacer { flex: 1; }
+
+  .score-display {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .score-label {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+  }
+
+  .score-value {
+    font-family: var(--display);
+    font-size: 1.4rem;
+    font-weight: 700;
+    transition: color 0.5s;
+  }
+
+  .score-bar-wrap {
+    width: 120px;
+  }
+
+  .virus-name-header {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--yellow);
+    letter-spacing: 0.1em;
+    text-align: right;
+    max-width: 160px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* --- Game Body --- */
+  .game-body {
+    display: grid;
+    grid-template-columns: 260px 1fr 240px;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* Left Sidebar */
+  .sidebar-left {
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  /* Day Progress */
+  .day-progress {
+    padding: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .day-progress-title {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .day-dots {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 4px;
+  }
+  .day-dot {
+    height: 4px;
+    background: var(--border);
+    transition: all 0.4s;
+  }
+  .day-dot.done { background: var(--green-dim); }
+  .day-dot.current { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .day-dot.future { background: var(--border); }
+
+  /* Question dots */
+  .q-dots {
+    display: flex;
+    gap: 6px;
+    margin-top: 10px;
+  }
+  .q-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border);
+    transition: all 0.3s;
+  }
+  .q-dot.done { background: var(--green-dim); }
+  .q-dot.current { background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 1s infinite; }
+
+  /* Virus Info in Sidebar */
+  .virus-card {
+    padding: 14px;
+    border-bottom: 1px solid var(--border);
+    flex: 1;
+  }
+
+  .virus-card-name {
+    font-family: var(--display);
+    font-size: 0.75rem;
+    color: var(--yellow);
+    margin-bottom: 14px;
+    letter-spacing: 0.05em;
+    line-height: 1.3;
+  }
+
+  .info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    gap: 8px;
+  }
+  .info-key {
+    font-family: var(--mono);
+    font-size: 0.58rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    flex-shrink: 0;
+  }
+  .info-val {
+    font-size: 0.75rem;
+    color: var(--text);
+    text-align: right;
+    line-height: 1.3;
+  }
+  .info-val.danger { color: var(--red); }
+  .info-val.warning { color: var(--yellow); }
+  .info-val.good { color: var(--green); }
+
+  .symptoms-mini {
+    margin-top: 12px;
+  }
+  .symptoms-mini-title {
+    font-family: var(--mono);
+    font-size: 0.58rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .symptom-mini {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--red);
+    margin-bottom: 3px;
+    padding-left: 12px;
+    position: relative;
+  }
+  .symptom-mini::before {
+    content: '▸';
+    position: absolute; left: 0;
+    color: rgba(255,52,52,0.5);
+  }
+
+  /* Containment meter */
+  .containment-meter {
+    padding: 14px;
+  }
+  .meter-label {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* Main Center */
+  .game-center {
+    padding: 28px;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .question-area {
+    animation: slideInUp 0.4s ease;
+    flex: 1;
+  }
+
+  .question-meta {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    margin-bottom: 16px;
+  }
+
+  .scenario-box {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--cyan);
+    padding: 18px;
+    margin-bottom: 20px;
+    font-size: 0.95rem;
+    line-height: 1.75;
+    color: var(--text);
+    position: relative;
+  }
+
+  .scenario-box::before {
+    content: 'SITUATION REPORT';
+    position: absolute;
+    top: -1px; right: 10px;
+    font-family: var(--mono);
+    font-size: 0.55rem;
+    background: var(--cyan);
+    color: var(--bg);
+    padding: 1px 6px;
+    letter-spacing: 0.1em;
+  }
+
+  .question-box {
+    font-family: var(--display);
+    font-size: 1.05rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1.5;
+    margin-bottom: 24px;
+    padding: 0 4px;
+  }
+
+  .choices-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .choice-btn {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 16px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.25s;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    font-family: var(--body);
+    font-size: 0.9rem;
+    color: var(--text);
+    line-height: 1.5;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .choice-btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: var(--cyan);
+    opacity: 0;
+    transition: opacity 0.25s;
+  }
+
+  .choice-btn:hover {
+    border-color: var(--cyan);
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(0,212,255,0.15);
+  }
+  .choice-btn:hover::before { opacity: 0.05; }
+
+  .choice-btn.selected {
+    border-color: var(--green);
+    color: white;
+  }
+  .choice-btn.selected::before { opacity: 0.08; background: var(--green); }
+
+  .choice-id {
+    font-family: var(--display);
+    font-size: 0.9rem;
+    color: var(--cyan);
+    flex-shrink: 0;
+    font-weight: 700;
+  }
+  .choice-btn:hover .choice-id,
+  .choice-btn.selected .choice-id { color: var(--green); }
+
+  .edu-note {
+    background: rgba(155,93,229,0.08);
+    border: 1px solid rgba(155,93,229,0.2);
+    border-left: 3px solid var(--purple);
+    padding: 12px 16px;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: #B88FE0;
+    line-height: 1.6;
+    letter-spacing: 0.02em;
+  }
+
+  .edu-note::before {
+    content: '◈ BIO NOTE: ';
+    color: var(--purple);
+    font-weight: bold;
+  }
+
+  /* Right Sidebar */
+  .sidebar-right {
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .history-panel {
+    padding: 14px;
+    flex: 1;
+    overflow-y: auto;
+  }
+
+  .history-title {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .history-entry {
+    margin-bottom: 10px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid rgba(26,48,80,0.5);
+    animation: slideInRight 0.3s ease;
+  }
+  .history-entry-meta {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--text-dim);
+    margin-bottom: 3px;
+    letter-spacing: 0.08em;
+  }
+  .history-entry-choice {
+    font-size: 0.72rem;
+    color: var(--text);
+    line-height: 1.4;
+    margin-bottom: 2px;
+  }
+  .history-entry-score {
+    font-family: var(--display);
+    font-size: 0.7rem;
+    font-weight: 700;
+  }
+  .history-entry-score.pos { color: var(--green); }
+  .history-entry-score.neg { color: var(--red); }
+
+  /* ════════════════════════════
+     MODAL: FEEDBACK
+  ════════════════════════════ */
+  .modal-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: rgba(5,10,20,0.85);
+    z-index: 500;
+    justify-content: center;
+    align-items: center;
+    backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+
+  .feedback-modal {
+    max-width: 560px;
+    width: 90%;
+    border: 1px solid var(--border);
+    background: var(--panel);
+    animation: slideInUp 0.35s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .feedback-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .result-badge {
+    font-family: var(--display);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.15em;
+    padding: 5px 14px;
+    clip-path: polygon(6px 0%, 100% 0%, calc(100% - 6px) 100%, 0% 100%);
+  }
+  .result-badge.excellent { background: var(--green); color: var(--bg); }
+  .result-badge.good { background: var(--cyan); color: var(--bg); }
+  .result-badge.poor { background: var(--yellow); color: var(--bg); }
+  .result-badge.critical_error, .result-badge.terrible { background: var(--red); color: white; }
+
+  .feedback-score-change {
+    font-family: var(--display);
+    font-size: 1.3rem;
+    font-weight: 700;
+    margin-left: auto;
+  }
+
+  .feedback-body {
+    padding: 20px;
+  }
+
+  .feedback-text {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: var(--text);
+    margin-bottom: 14px;
+  }
+
+  .containment-effect {
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    padding: 12px;
+    font-family: var(--mono);
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    line-height: 1.6;
+    margin-bottom: 20px;
+  }
+  .containment-effect::before {
+    content: '⚡ OUTBREAK EFFECT: ';
+    color: var(--yellow);
+    font-weight: bold;
+  }
+
+  /* ════════════════════════════
+     SCREEN: DAY TRANSITION
+  ════════════════════════════ */
+  #screen-day-transition {
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: radial-gradient(ellipse 60% 60% at 50% 50%, #0A1830 0%, #050A14 100%);
+  }
+
+  .day-transition-content {
+    animation: slideInUp 0.5s ease;
+  }
+
+  .transition-day {
+    font-family: var(--display);
+    font-size: 0.75rem;
+    letter-spacing: 0.4em;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .transition-number {
+    font-family: var(--display);
+    font-size: clamp(4rem, 12vw, 8rem);
+    font-weight: 900;
+    color: var(--green);
+    text-shadow: 0 0 40px rgba(0,255,136,0.4);
+    line-height: 1;
+    margin-bottom: 16px;
+  }
+
+  .transition-theme {
+    font-size: 1.1rem;
+    color: var(--cyan);
+    letter-spacing: 0.05em;
+    margin-bottom: 10px;
+  }
+
+  .transition-score {
+    font-family: var(--mono);
+    font-size: 0.85rem;
+    color: var(--text-dim);
+    margin-bottom: 32px;
+  }
+
+  /* ════════════════════════════
+     SCREEN: GAME OVER
+  ════════════════════════════ */
+  #screen-game-over {
+    padding: 30px 20px;
+    overflow-y: auto;
+  }
+
+  .gameover-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    animation: slideInUp 0.6s ease;
+  }
+
+  .outcome-banner {
+    text-align: center;
+    padding: 40px 20px;
+    margin-bottom: 30px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .outcome-icon {
+    font-size: 4rem;
+    display: block;
+    margin-bottom: 16px;
+  }
+
+  .outcome-title {
+    font-family: var(--display);
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+
+  .outcome-headline {
+    font-size: 1.05rem;
+    color: var(--text-dim);
+    max-width: 600px;
+    margin: 0 auto 20px;
+    line-height: 1.6;
+  }
+
+  .outcome-score {
+    font-family: var(--display);
+    font-size: 2rem;
+    font-weight: 700;
+  }
+
+  .gameover-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-bottom: 30px;
+  }
+
+  .eval-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 20px;
+    position: relative;
+  }
+  .eval-panel::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+  }
+
+  .eval-title {
+    font-family: var(--display);
+    font-size: 0.65rem;
+    letter-spacing: 0.2em;
+    color: var(--cyan);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .eval-text {
+    font-size: 0.9rem;
+    line-height: 1.7;
+    color: var(--text);
+  }
+
+  .list-item {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--text);
+    margin-bottom: 6px;
+    padding-left: 16px;
+    position: relative;
+    line-height: 1.4;
+  }
+  .list-item.success::before { content: '✓ '; position: absolute; left: 0; color: var(--green); }
+  .list-item.mistake::before { content: '✗ '; position: absolute; left: 0; color: var(--red); }
+
+  /* Real Virus Info Section */
+  .virus-info-section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    margin-bottom: 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .virus-info-section::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--purple), var(--cyan), var(--purple));
+  }
+
+  .virus-info-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: rgba(155,93,229,0.05);
+  }
+
+  .info-section-badge {
+    font-family: var(--display);
+    font-size: 0.6rem;
+    letter-spacing: 0.15em;
+    background: var(--purple);
+    color: white;
+    padding: 3px 10px;
+  }
+
+  .real-virus-title {
+    font-family: var(--display);
+    font-size: 1.1rem;
+    color: #D4B8FF;
+    letter-spacing: 0.05em;
+  }
+
+  .virus-info-body {
+    padding: 24px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+
+  .info-block {
+    padding: 16px;
+    background: var(--bg2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--purple);
+  }
+
+  .info-block-title {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: #9B5DE5;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .info-block-text {
+    font-size: 0.88rem;
+    line-height: 1.7;
+    color: var(--text);
+  }
+
+  .fact-block {
+    grid-column: 1 / -1;
+    background: rgba(155,93,229,0.08);
+    border: 1px solid rgba(155,93,229,0.3);
+    padding: 16px;
+    font-family: var(--mono);
+    font-size: 0.78rem;
+    color: #C4A0FF;
+    line-height: 1.7;
+  }
+  .fact-block::before {
+    content: '◈ DID YOU KNOW: ';
+    color: var(--purple);
+    font-weight: bold;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+  }
+
+  .gameover-footer {
+    text-align: center;
+    padding: 10px;
+  }
+
+  /* ── LOADING DOTS ── */
+  .loading-dots::after {
+    content: '...';
+    animation: blink 1.2s step-end infinite;
+  }
+
+  /* ── SCROLLBAR ── */
+  ::-webkit-scrollbar { width: 4px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--cyan); }
+
+  /* ── RESPONSIVE ── */
+  @media (max-width: 900px) {
+    .game-body { grid-template-columns: 1fr; }
+    .sidebar-left { display: none; }
+    .sidebar-right { display: none; }
+    .game-center { padding: 16px; }
+    .choices-grid { grid-template-columns: 1fr; }
+    .gameover-grid { grid-template-columns: 1fr; }
+    .virus-info-body { grid-template-columns: 1fr; }
+    .virus-grid { grid-template-columns: 1fr; }
+  }
+
+  @media (max-width: 600px) {
+    .landing-stats { gap: 24px; }
+    .feedback-modal { width: 96%; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ LANDING ══════════════════ -->
+<div id="screen-landing" class="screen active">
+  <div class="landing-content">
+    <span class="biohazard-icon">☣</span>
+    <h1 class="landing-title">OUTBREAK<br>RESPONSE</h1>
+    <p class="landing-sub">Viral Containment Simulation // Biology Education Module</p>
+    <div class="landing-divider"></div>
+    <p class="landing-desc">
+      A novel pathogen has been detected. As lead scientist at the Global Viral Response Center,
+      you have <strong style="color:var(--cyan)">7 days</strong> to contain the outbreak before it becomes a pandemic.
+      Every decision you make is grounded in real epidemiology and virology.
+    </p>
+    <div class="landing-stats">
+      <div class="stat-item">
+        <span class="stat-value display">7</span>
+        <span class="stat-label">Days</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value display">35</span>
+        <span class="stat-label">Decisions</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-value display">∞</span>
+        <span class="stat-label">Viruses</span>
+      </div>
+    </div>
+    <div class="warning-bar">⚠ WARNING — LEVEL 4 PATHOGEN PROTOCOL ACTIVE — AUTHORIZED PERSONNEL ONLY ⚠</div>
+    <button class="btn btn-primary" onclick="startGame()" style="font-size:0.9rem; padding:16px 48px;">
+      ▶ INITIATE RESPONSE
+    </button>
+  </div>
+</div>
+
+<!-- ══════════════════ LOADING ══════════════════ -->
+<div id="screen-loading" class="screen" style="justify-content:center;align-items:center;flex-direction:column;text-align:center;">
+  <div class="loading-spinner">
+    <div class="spinner-ring"></div>
+    <div class="spinner-ring"></div>
+    <div class="spinner-ring"></div>
+  </div>
+  <p class="loading-status" style="margin-bottom:8px;">ANALYZING PATHOGEN DATA<span class="loading-dots"></span></p>
+  <p style="font-family:var(--mono);font-size:0.65rem;color:var(--text-dim);letter-spacing:0.1em;margin-bottom:24px;">AI SYSTEMS INITIALIZING</p>
+  <div id="loading-log" class="loading-log"></div>
+</div>
+
+<!-- ══════════════════ BRIEFING ══════════════════ -->
+<div id="screen-briefing" class="screen" style="justify-content:center;align-items:center;padding:20px;">
+  <div class="briefing-card" id="briefing-card">
+    <div class="briefing-header">
+      <div class="alert-badge">◉ LEVEL 4 ALERT</div>
+      <span style="font-family:var(--display);font-size:0.8rem;color:var(--red);letter-spacing:0.1em;" id="briefing-virus-name">UNKNOWN PATHOGEN</span>
+      <span style="margin-left:auto;font-family:var(--mono);font-size:0.65rem;color:var(--text-dim);" id="briefing-location">–</span>
+    </div>
+    <div class="briefing-body">
+      <div class="virus-grid">
+        <div class="virus-stat">
+          <div class="virus-stat-label">Classification</div>
+          <div class="virus-stat-value" id="brief-classification">–</div>
+        </div>
+        <div class="virus-stat">
+          <div class="virus-stat-label">Mortality Rate</div>
+          <div class="virus-stat-value" style="color:var(--red);" id="brief-mortality">–</div>
+        </div>
+        <div class="virus-stat">
+          <div class="virus-stat-label">Transmission</div>
+          <div class="virus-stat-value" style="font-size:0.8rem;color:var(--text);" id="brief-transmission">–</div>
+        </div>
+        <div class="virus-stat">
+          <div class="virus-stat-label">Incubation Period</div>
+          <div class="virus-stat-value" style="color:var(--yellow);" id="brief-incubation">–</div>
+        </div>
+      </div>
+
+      <div class="symptoms-mini" style="margin-bottom:16px;">
+        <div class="virus-stat-label" style="font-family:var(--mono);font-size:0.6rem;color:var(--text-dim);letter-spacing:0.15em;text-transform:uppercase;margin-bottom:8px;">Identified Symptoms</div>
+        <div id="brief-symptoms" class="symptoms-list"></div>
+      </div>
+
+      <div class="scenario-text" id="brief-scenario">Loading scenario...</div>
+      <div class="briefing-mission" id="brief-mission">Loading mission...</div>
+
+      <div style="text-align:right;">
+        <button class="btn btn-primary" onclick="beginDay()" id="begin-btn">
+          ▶ BEGIN MISSION — DAY 1
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ GAME ══════════════════ -->
+<div id="screen-game" class="screen">
+  <!-- Header -->
+  <div class="game-header">
+    <div class="game-logo">☣ OUTBREAK</div>
+    <div class="header-divider"></div>
+    <div class="day-indicator">
+      <span class="day-label">DAY</span>
+      <span class="day-value display" id="hdr-day">1</span>
+      <span class="day-label" style="margin:0 4px;">/</span>
+      <span class="day-label">7</span>
+    </div>
+    <div class="header-divider"></div>
+    <div class="day-indicator">
+      <span class="day-label">QUESTION</span>
+      <span class="day-value display" id="hdr-q">1</span>
+      <span class="day-label" style="margin:0 4px;">/</span>
+      <span class="day-label">5</span>
+    </div>
+    <div class="header-spacer"></div>
+    <div class="virus-name-header" id="hdr-virus">–</div>
+    <div class="header-divider"></div>
+    <div class="score-display">
+      <span class="score-label">CONTAINMENT</span>
+      <div class="score-bar-wrap">
+        <div class="progress-track">
+          <div class="progress-fill" id="score-bar" style="width:50%;background:var(--green);"></div>
+        </div>
+      </div>
+      <span class="score-value" id="hdr-score">50</span><span style="font-family:var(--mono);font-size:0.7rem;color:var(--text-dim);">/100</span>
+    </div>
+  </div>
+
+  <!-- Body -->
+  <div class="game-body">
+    <!-- Left Sidebar -->
+    <div class="sidebar-left">
+      <div class="day-progress">
+        <div class="day-progress-title">WEEK PROGRESS</div>
+        <div class="day-dots" id="day-dots"></div>
+        <div style="margin-top:10px;">
+          <div class="day-progress-title">TODAY'S QUESTIONS</div>
+          <div class="q-dots" id="q-dots"></div>
+        </div>
+      </div>
+      <div class="virus-card">
+        <div class="virus-card-name" id="side-virus-name">–</div>
+        <div class="info-row">
+          <span class="info-key">Location</span>
+          <span class="info-val" id="side-location">–</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Cases</span>
+          <span class="info-val danger" id="side-cases">–</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Mortality</span>
+          <span class="info-val danger" id="side-mortality">–</span>
+        </div>
+        <div class="info-row">
+          <span class="info-key">Incubation</span>
+          <span class="info-val warning" id="side-incubation">–</span>
+        </div>
+        <div class="symptoms-mini">
+          <div class="symptoms-mini-title">Key Symptoms</div>
+          <div id="side-symptoms"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Center -->
+    <div class="game-center">
+      <div class="question-area" id="question-area">
+        <div id="question-loading" style="text-align:center;padding:60px 0;">
+          <div class="loading-spinner" style="width:50px;height:50px;">
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+            <div class="spinner-ring"></div>
+          </div>
+          <p style="font-family:var(--mono);font-size:0.75rem;color:var(--text-dim);margin-top:16px;letter-spacing:0.1em;">GENERATING SCENARIO<span class="loading-dots"></span></p>
+        </div>
+        <div id="question-content" style="display:none;">
+          <div class="question-meta" id="q-meta">DAY 1 — QUESTION 1 OF 5</div>
+          <div class="scenario-box" id="q-scenario">–</div>
+          <div class="question-box" id="q-text">–</div>
+          <div class="choices-grid" id="choices-grid"></div>
+          <div class="edu-note" id="edu-note">–</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Sidebar -->
+    <div class="sidebar-right">
+      <div class="history-panel">
+        <div class="history-title">DECISION LOG</div>
+        <div id="history-entries"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ DAY TRANSITION ══════════════════ -->
+<div id="screen-day-transition" class="screen" style="justify-content:center;align-items:center;flex-direction:column;">
+  <div class="day-transition-content">
+    <div class="transition-day">ADVANCING TO</div>
+    <div class="transition-number display" id="trans-day-num">2</div>
+    <div class="transition-theme" id="trans-theme">Containment Strategies</div>
+    <div class="transition-score mono" id="trans-score">Current Containment Score: 50/100</div>
+    <button class="btn btn-primary" onclick="continueAfterTransition()">▶ CONTINUE MISSION</button>
+  </div>
+</div>
+
+<!-- ══════════════════ GAME OVER ══════════════════ -->
+<div id="screen-game-over" class="screen">
+  <div class="gameover-inner">
+
+    <div class="outcome-banner" id="outcome-banner">
+      <span class="outcome-icon" id="outcome-icon">☣</span>
+      <h1 class="outcome-title display" id="outcome-title">–</h1>
+      <p class="outcome-headline" id="outcome-headline">–</p>
+      <div class="outcome-score" id="outcome-score">–</div>
+    </div>
+
+    <div id="gameover-loading" style="text-align:center;padding:40px;">
+      <div class="loading-spinner" style="width:50px;height:50px;margin:0 auto 16px;">
+        <div class="spinner-ring"></div>
+        <div class="spinner-ring"></div>
+        <div class="spinner-ring"></div>
+      </div>
+      <p style="font-family:var(--mono);font-size:0.75rem;color:var(--text-dim);letter-spacing:0.1em;">COMPILING FINAL REPORT<span class="loading-dots"></span></p>
+    </div>
+
+    <div id="gameover-content" style="display:none;">
+      <div class="gameover-grid">
+        <div class="eval-panel">
+          <div class="eval-title">Performance Evaluation</div>
+          <div class="eval-text" id="eval-text">–</div>
+        </div>
+        <div class="eval-panel">
+          <div class="eval-title">Mission Summary</div>
+          <div id="eval-lists">–</div>
+        </div>
+      </div>
+
+      <div class="virus-info-section">
+        <div class="virus-info-header">
+          <span class="info-section-badge">◈ REAL-WORLD SCIENCE</span>
+          <span class="real-virus-title display" id="real-virus-title">–</span>
+        </div>
+        <div class="virus-info-body">
+          <div class="info-block">
+            <div class="info-block-title">Virus Overview</div>
+            <div class="info-block-text" id="info-overview">–</div>
+          </div>
+          <div class="info-block">
+            <div class="info-block-title">Historical Outbreaks</div>
+            <div class="info-block-text" id="info-history">–</div>
+          </div>
+          <div class="info-block">
+            <div class="info-block-title">Real-World Containment</div>
+            <div class="info-block-text" id="info-containment">–</div>
+          </div>
+          <div class="info-block">
+            <div class="info-block-title">Vaccines & Treatments</div>
+            <div class="info-block-text" id="info-vaccines">–</div>
+          </div>
+          <div class="fact-block" id="info-fact">–</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="gameover-footer" id="gameover-footer" style="display:none;">
+      <button class="btn btn-primary" onclick="restartGame()" style="margin-right:12px;">↺ PLAY AGAIN</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════ FEEDBACK MODAL ══════════════════ -->
+<div class="modal-overlay" id="feedback-modal">
+  <div class="feedback-modal">
+    <div class="feedback-header">
+      <div class="result-badge" id="modal-badge">–</div>
+      <span style="font-family:var(--mono);font-size:0.7rem;color:var(--text-dim);margin-left:8px;" id="modal-choice-label">–</span>
+      <span class="feedback-score-change" id="modal-score-change">–</span>
+    </div>
+    <div class="feedback-body">
+      <div id="modal-loading" style="text-align:center;padding:24px 0;">
+        <div class="loading-spinner" style="width:40px;height:40px;margin:0 auto 12px;">
+          <div class="spinner-ring"></div>
+          <div class="spinner-ring"></div>
+        </div>
+        <p style="font-family:var(--mono);font-size:0.7rem;color:var(--text-dim);">ANALYZING DECISION<span class="loading-dots"></span></p>
+      </div>
+      <div id="modal-content" style="display:none;">
+        <div class="feedback-text" id="modal-feedback">–</div>
+        <div class="containment-effect" id="modal-effect">–</div>
+        <div style="text-align:right;">
+          <button class="btn btn-primary" onclick="dismissFeedback()" id="modal-next-btn">▶ NEXT</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════
+//  GAME STATE
+// ══════════════════════════════════════════════════════
+let state = {
+  phase: 'landing',
+  virusData: null,
+  day: 1,
+  questionNum: 1,
+  score: 50,
+  history: [],
+  currentQuestion: null,
+  selectedChoice: null,
+  pendingTransitionDay: null
+};
+
+const DAY_THEMES = {
+  1: 'Initial Detection & Assessment',
+  2: 'Quarantine & Contact Tracing',
+  3: 'Treatment & Medical Response',
+  4: 'Public Health Communication',
+  5: 'Resource Allocation',
+  6: 'Managing Complications',
+  7: 'Final Containment Push'
+};
+
+// ── Utilities ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id).classList.add('active');
+}
+
+function addLoadingLog(text) {
+  const log = document.getElementById('loading-log');
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = `<span style="color:var(--green-dim);">▸</span> ${text}`;
+  log.appendChild(line);
+}
+
+function updateScore(newScore) {
+  state.score = Math.max(0, Math.min(100, newScore));
+  document.getElementById('hdr-score').textContent = state.score;
+
+  // Color the score
+  const el = document.getElementById('hdr-score');
+  if (state.score >= 70) el.style.color = 'var(--green)';
+  else if (state.score >= 50) el.style.color = 'var(--yellow)';
+  else el.style.color = 'var(--red)';
+
+  // Update progress bar
+  const bar = document.getElementById('score-bar');
+  bar.style.width = state.score + '%';
+  if (state.score >= 70) bar.style.background = 'var(--green)';
+  else if (state.score >= 50) bar.style.background = 'var(--yellow)';
+  else bar.style.background = 'var(--red)';
+}
+
+// ── API calls ──
+async function api(endpoint, body) {
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return res.json();
+}
+
+// ══════════════════════════════════════════════════════
+//  GAME FLOW
+// ══════════════════════════════════════════════════════
+
+async function startGame() {
+  showScreen('loading');
+  addLoadingLog('Connecting to pathogen database...');
+
+  setTimeout(() => addLoadingLog('Scanning for active outbreak signatures...'), 600);
+  setTimeout(() => addLoadingLog('Identified novel pathogen — analyzing genome...'), 1400);
+  setTimeout(() => addLoadingLog('Cross-referencing with historical viral data...'), 2200);
+  setTimeout(() => addLoadingLog('Generating mission briefing...'), 3000);
+
+  try {
+    const result = await api('/api/start', {});
+    if (!result.success) throw new Error('API error');
+
+    state.virusData = result.data;
+
+    setTimeout(() => {
+      addLoadingLog('Briefing prepared — stand by, scientist.');
+      setTimeout(() => showBriefing(), 800);
+    }, 3600);
+  } catch (e) {
+    addLoadingLog('ERROR: Could not connect to AI systems. Check your API key.');
+    console.error(e);
+  }
+}
+
+function showBriefing() {
+  const v = state.virusData;
+  document.getElementById('briefing-virus-name').textContent = v.virus_name;
+  document.getElementById('briefing-location').textContent = v.location;
+  document.getElementById('brief-classification').textContent = v.classification;
+  document.getElementById('brief-mortality').textContent = v.mortality_rate;
+  document.getElementById('brief-transmission').textContent = v.transmission;
+  document.getElementById('brief-incubation').textContent = v.incubation_period;
+  document.getElementById('brief-scenario').textContent = v.scenario;
+  document.getElementById('brief-mission').textContent = v.day1_briefing;
+
+  const symDiv = document.getElementById('brief-symptoms');
+  symDiv.innerHTML = '';
+  (v.symptoms || []).forEach(s => {
+    const tag = document.createElement('span');
+    tag.className = 'symptom-tag';
+    tag.textContent = s;
+    symDiv.appendChild(tag);
+  });
+
+  showScreen('briefing');
+}
+
+function beginDay() {
+  populateSidebar();
+  initDayDots();
+  showScreen('game');
+  loadQuestion();
+}
+
+function populateSidebar() {
+  const v = state.virusData;
+  document.getElementById('hdr-virus').textContent = v.virus_name;
+  document.getElementById('side-virus-name').textContent = v.virus_name;
+  document.getElementById('side-location').textContent = v.location;
+  document.getElementById('side-cases').textContent = v.initial_cases + ' initial';
+  document.getElementById('side-mortality').textContent = v.mortality_rate;
+  document.getElementById('side-incubation').textContent = v.incubation_period;
+
+  const symDiv = document.getElementById('side-symptoms');
+  symDiv.innerHTML = '';
+  (v.symptoms || []).forEach(s => {
+    const el = document.createElement('div');
+    el.className = 'symptom-mini';
+    el.textContent = s;
+    symDiv.appendChild(el);
+  });
+}
+
+function initDayDots() {
+  const container = document.getElementById('day-dots');
+  container.innerHTML = '';
+  for (let d = 1; d <= 7; d++) {
+    const dot = document.createElement('div');
+    dot.className = 'day-dot ' + (d < state.day ? 'done' : d === state.day ? 'current' : 'future');
+    dot.id = 'day-dot-' + d;
+    container.appendChild(dot);
+  }
+
+  const qContainer = document.getElementById('q-dots');
+  qContainer.innerHTML = '';
+  for (let q = 1; q <= 5; q++) {
+    const dot = document.createElement('div');
+    dot.className = 'q-dot ' + (q < state.questionNum ? 'done' : q === state.questionNum ? 'current' : '');
+    dot.id = 'q-dot-' + q;
+    qContainer.appendChild(dot);
+  }
+}
+
+function updateDots() {
+  document.getElementById('hdr-day').textContent = state.day;
+  document.getElementById('hdr-q').textContent = state.questionNum;
+
+  for (let d = 1; d <= 7; d++) {
+    const dot = document.getElementById('day-dot-' + d);
+    if (!dot) continue;
+    dot.className = 'day-dot ' + (d < state.day ? 'done' : d === state.day ? 'current' : 'future');
+  }
+  for (let q = 1; q <= 5; q++) {
+    const dot = document.getElementById('q-dot-' + q);
+    if (!dot) continue;
+    dot.className = 'q-dot ' + (q < state.questionNum ? 'done' : q === state.questionNum ? 'current' : '');
+  }
+}
+
+async function loadQuestion() {
+  // Show loading state
+  document.getElementById('question-loading').style.display = 'block';
+  document.getElementById('question-content').style.display = 'none';
+  updateDots();
+
+  try {
+    const result = await api('/api/question', {
+      virus_data: state.virusData,
+      day: state.day,
+      question_num: state.questionNum,
+      history: state.history
+    });
+
+    if (!result.success) throw new Error('API error');
+    state.currentQuestion = result.data;
+    renderQuestion(result.data);
+  } catch (e) {
+    console.error(e);
+    document.getElementById('q-scenario').textContent = 'Error loading question. Please check your connection.';
+    document.getElementById('question-loading').style.display = 'none';
+    document.getElementById('question-content').style.display = 'block';
+  }
+}
+
+function renderQuestion(data) {
+  document.getElementById('q-meta').textContent =
+    `DAY ${state.day} — QUESTION ${state.questionNum} OF 5 — ${(DAY_THEMES[state.day] || '').toUpperCase()}`;
+  document.getElementById('q-scenario').textContent = data.scenario;
+  document.getElementById('q-text').textContent = data.question;
+  document.getElementById('edu-note').textContent = data.educational_note;
+
+  const grid = document.getElementById('choices-grid');
+  grid.innerHTML = '';
+  (data.choices || []).forEach(choice => {
+    const btn = document.createElement('button');
+    btn.className = 'choice-btn';
+    btn.innerHTML = `<span class="choice-id">${choice.id}</span><span>${choice.text}</span>`;
+    btn.onclick = () => selectChoice(choice.id, btn);
+    grid.appendChild(btn);
+  });
+
+  document.getElementById('question-loading').style.display = 'none';
+  document.getElementById('question-content').style.display = 'block';
+  state.selectedChoice = null;
+}
+
+function selectChoice(choiceId, btnEl) {
+  if (state.selectedChoice) return; // Already answered
+
+  state.selectedChoice = choiceId;
+  document.querySelectorAll('.choice-btn').forEach(b => b.classList.remove('selected'));
+  btnEl.classList.add('selected');
+  document.querySelectorAll('.choice-btn').forEach(b => b.style.pointerEvents = 'none');
+
+  // Open feedback modal in loading state
+  document.getElementById('modal-loading').style.display = 'block';
+  document.getElementById('modal-content').style.display = 'none';
+
+  const choiceText = state.currentQuestion.choices.find(c => c.id === choiceId)?.text || '';
+  document.getElementById('modal-choice-label').textContent = `Option ${choiceId} selected`;
+  document.getElementById('modal-badge').textContent = '...';
+  document.getElementById('modal-badge').className = 'result-badge';
+  document.getElementById('modal-score-change').textContent = '';
+  document.getElementById('feedback-modal').classList.add('open');
+
+  getFeedback(choiceId, choiceText);
+}
+
+async function getFeedback(choiceId, choiceText) {
+  try {
+    const result = await api('/api/feedback', {
+      choice: choiceId,
+      question_data: state.currentQuestion
+    });
+
+    if (!result.success) throw new Error();
+    const fb = result.data;
+
+    // Update score
+    updateScore(state.score + (fb.score_change || 0));
+
+    // Add to history
+    state.history.push({
+      day: state.day,
+      q: state.questionNum,
+      choice: choiceId,
+      choice_text: choiceText,
+      score_change: fb.score_change || 0,
+      rating: fb.result?.toLowerCase() || 'unknown'
+    });
+
+    // Add to history panel
+    addHistoryEntry(choiceId, choiceText, fb.score_change || 0, fb.result);
+
+    // Render modal
+    const badge = document.getElementById('modal-badge');
+    badge.textContent = fb.result || 'RESULT';
+    const ratingClass = (fb.result || '').toLowerCase().replace(' ', '_');
+    badge.className = 'result-badge ' + ratingClass;
+
+    const scoreEl = document.getElementById('modal-score-change');
+    const sc = fb.score_change || 0;
+    scoreEl.textContent = (sc >= 0 ? '+' : '') + sc;
+    scoreEl.style.color = sc >= 0 ? 'var(--green)' : 'var(--red)';
+
+    document.getElementById('modal-feedback').textContent = fb.feedback || '';
+    document.getElementById('modal-effect').textContent = fb.containment_effect || '';
+
+    // Check if last question of last day
+    const isLastQuestion = (state.day === 7 && state.questionNum === 5);
+    document.getElementById('modal-next-btn').textContent =
+      isLastQuestion ? '▶ VIEW FINAL REPORT' : '▶ NEXT';
+
+    document.getElementById('modal-loading').style.display = 'none';
+    document.getElementById('modal-content').style.display = 'block';
+  } catch (e) {
+    console.error(e);
+    document.getElementById('modal-feedback').textContent = 'Error retrieving feedback.';
+    document.getElementById('modal-loading').style.display = 'none';
+    document.getElementById('modal-content').style.display = 'block';
+  }
+}
+
+function addHistoryEntry(choiceId, choiceText, scoreChange, result) {
+  const container = document.getElementById('history-entries');
+  const entry = document.createElement('div');
+  entry.className = 'history-entry';
+  const sc = scoreChange >= 0 ? '+' + scoreChange : '' + scoreChange;
+  const color = scoreChange >= 0 ? 'pos' : 'neg';
+  entry.innerHTML = `
+    <div class="history-entry-meta">DAY ${state.day} — Q${state.questionNum}</div>
+    <div class="history-entry-choice">${choiceId}: ${choiceText.substring(0, 70)}${choiceText.length > 70 ? '…' : ''}</div>
+    <div class="history-entry-score ${color}">${sc} pts — ${result || ''}</div>
+  `;
+  container.insertBefore(entry, container.firstChild);
+}
+
+function dismissFeedback() {
+  document.getElementById('feedback-modal').classList.remove('open');
+
+  const isLastQuestion = (state.day === 7 && state.questionNum === 5);
+
+  if (isLastQuestion) {
+    showGameOver();
+    return;
+  }
+
+  if (state.questionNum === 5) {
+    // End of day — transition
+    const nextDay = state.day + 1;
+    state.day = nextDay;
+    state.questionNum = 1;
+
+    document.getElementById('trans-day-num').textContent = nextDay;
+    document.getElementById('trans-theme').textContent = DAY_THEMES[nextDay] || '';
+    document.getElementById('trans-score').textContent =
+      `Containment Score: ${state.score}/100`;
+    showScreen('day-transition');
+  } else {
+    state.questionNum++;
+    loadQuestion();
+  }
+}
+
+function continueAfterTransition() {
+  initDayDots();
+  showScreen('game');
+  loadQuestion();
+}
+
+async function showGameOver() {
+  showScreen('game-over');
+
+  // Set outcome header immediately
+  const outcome = state.score >= 60 ? 'CONTAINED' : 'OUTBREAK FAILED';
+  const isSuccess = state.score >= 60;
+
+  document.getElementById('outcome-icon').textContent = isSuccess ? '✓' : '☣';
+  document.getElementById('outcome-title').textContent = outcome;
+  document.getElementById('outcome-title').style.color = isSuccess ? 'var(--green)' : 'var(--red)';
+  document.getElementById('outcome-title').style.textShadow = isSuccess
+    ? '0 0 30px rgba(0,255,136,0.5)' : '0 0 30px rgba(255,52,52,0.5)';
+  document.getElementById('outcome-banner').style.borderBottom = '1px solid var(--border)';
+  document.getElementById('outcome-banner').style.marginBottom = '30px';
+  document.getElementById('outcome-score').textContent = `Final Score: ${state.score}/100`;
+  document.getElementById('outcome-score').style.color = isSuccess ? 'var(--green)' : 'var(--red)';
+  document.getElementById('outcome-headline').textContent = isSuccess
+    ? 'Your decisions helped contain the outbreak in time.'
+    : 'The virus spread beyond control. Study the science and try again.';
+
+  try {
+    const result = await api('/api/end', {
+      virus_data: state.virusData,
+      total_score: state.score,
+      history: state.history
+    });
+
+    if (!result.success) throw new Error();
+    const data = result.data;
+
+    // Headline
+    document.getElementById('outcome-headline').textContent = data.headline || '';
+
+    // Eval
+    document.getElementById('eval-text').textContent = data.evaluation || '';
+
+    // Lists
+    const listsDiv = document.getElementById('eval-lists');
+    listsDiv.innerHTML = '';
+    (data.key_successes || []).forEach(s => {
+      if (s) {
+        const el = document.createElement('div');
+        el.className = 'list-item success';
+        el.textContent = s;
+        listsDiv.appendChild(el);
+      }
+    });
+    (data.key_mistakes || []).forEach(m => {
+      if (m) {
+        const el = document.createElement('div');
+        el.className = 'list-item mistake';
+        el.textContent = m;
+        listsDiv.appendChild(el);
+      }
+    });
+
+    // Real virus info
+    const rv = data.real_world_virus_info || {};
+    document.getElementById('real-virus-title').textContent = rv.name || state.virusData.real_virus;
+    document.getElementById('info-overview').textContent = rv.overview || '';
+    document.getElementById('info-history').textContent = rv.historical_outbreaks || '';
+    document.getElementById('info-containment').textContent = rv.real_containment || '';
+    document.getElementById('info-vaccines').textContent = rv.vaccines_treatments || '';
+    document.getElementById('info-fact').textContent = rv.interesting_fact || '';
+
+    document.getElementById('gameover-loading').style.display = 'none';
+    document.getElementById('gameover-content').style.display = 'block';
+    document.getElementById('gameover-footer').style.display = 'block';
+  } catch (e) {
+    console.error(e);
+    document.getElementById('gameover-loading').innerHTML =
+      '<p style="color:var(--red);font-family:var(--mono);">Error loading final report.</p>';
+  }
+}
+
+function restartGame() {
+  // Reset state
+  state = {
+    phase: 'landing',
+    virusData: null,
+    day: 1,
+    questionNum: 1,
+    score: 50,
+    history: [],
+    currentQuestion: null,
+    selectedChoice: null
+  };
+  document.getElementById('history-entries').innerHTML = '';
+  document.getElementById('loading-log').innerHTML = '';
+  document.getElementById('gameover-loading').style.display = 'block';
+  document.getElementById('gameover-content').style.display = 'none';
+  document.getElementById('gameover-footer').style.display = 'none';
+  showScreen('landing');
+}
+</script>
+</body>
+</html>
