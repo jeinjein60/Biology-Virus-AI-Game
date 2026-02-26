@@ -6,7 +6,7 @@ import os
 
 app = Flask(__name__)
 
-# Configure Gemini
+# Configure Gemini - PUT YOUR API KEY HERE
 genai.configure(api_key=os.environ.get("AIzaSyCdivLcF1GkvUW0lGPczZ68Qp94h3JmBOg"))
 
 # Automatically find an available model
@@ -14,7 +14,7 @@ available_models = [m.name for m in genai.list_models() if 'generateContent' in 
 if not available_models:
     raise Exception("No models available! Check your API key.")
 
-model_name = available_models[0]  # Use the first available model
+model_name = available_models[0]
 print(f"✅ Using model: {model_name}")
 model = genai.GenerativeModel(model_name)
 
@@ -22,197 +22,10 @@ SYSTEM_PROMPT = """You are the AI director for OUTBREAK RESPONSE, a biology educ
 You generate scientifically accurate, engaging content about virology and epidemiology.
 Always respond with valid JSON only — no markdown, no code fences, no extra text outside the JSON."""
 
-def call_gemini(prompt, max_tokens=2000):
-    """Call Gemini API with the given prompt"""
-    full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}\n\nReturn ONLY valid JSON with no extra text."
-    
-    try:
-        response = model.generate_content(
-            full_prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=max_tokens,
-                temperature=0.7,
-            )
-        )
-        
-        # Check if response was blocked
-        if not response.text:
-            print("⚠️ Empty response from Gemini")
-            raise ValueError("Empty response from API")
-        
-        text = response.text.strip()
-        print(f"🤖 AI Response length: {len(text)} chars")
-        
-        # Check if response seems truncated
-        if not text.endswith('}') and not text.endswith('}'):
-            print(f"⚠️ Response appears truncated (doesn't end with }})")
-            # Try to salvage it
-            last_brace = text.rfind('}')
-            if last_brace > 0:
-                text = text[:last_brace+1]
-        
-        # Strip markdown
-        text = re.sub(r'^```json\s*', '', text)
-        text = re.sub(r'^```\s*', '', text)
-        text = re.sub(r'\s*```$', '', text)
-        
-        return text
-        
-    except Exception as e:
-        print(f"❌ Gemini API Error: {e}")
-        raise
 
-
-@app.route('/api/question', methods=['POST'])
-def get_question():
-    body = request.json
-    virus_data = body.get('virus_data', {})
-    day = body.get('day', 1)
-    question_num = body.get('question_num', 1)
-    history = body.get('history', [])
-
-    # More detailed themes for each question of each day
-    day_question_themes = {
-        1: {
-            1: "Initial case identification and diagnostic testing",
-            2: "Sample collection protocols and lab procedures",
-            3: "Establishing baseline epidemiological data",
-            4: "First responder safety and PPE deployment",
-            5: "Communication with local health authorities"
-        },
-        2: {
-            1: "Identifying index case and patient zero",
-            2: "Contact tracing methodology selection",
-            3: "Quarantine zone boundary determination",
-            4: "Monitoring asymptomatic carriers",
-            5: "Managing quarantine compliance and enforcement"
-        },
-        3: {
-            1: "Triage protocols for infected patients",
-            2: "Supportive care vs experimental treatments",
-            3: "Managing hospital surge capacity",
-            4: "Staff infection prevention measures",
-            5: "Allocating limited medical resources"
-        },
-        4: {
-            1: "Crafting public health messaging strategy",
-            2: "Managing misinformation and rumors",
-            3: "Coordinating with media outlets",
-            4: "Community education about symptoms",
-            5: "Addressing public panic and fear"
-        },
-        5: {
-            1: "Requesting international medical aid",
-            2: "PPE supply chain management",
-            3: "Vaccine development acceleration",
-            4: "Funding allocation priorities",
-            5: "Medical personnel deployment strategy"
-        },
-        6: {
-            1: "Detecting potential viral mutations",
-            2: "Managing secondary bacterial infections",
-            3: "Healthcare worker burnout prevention",
-            4: "Long-term patient care planning",
-            5: "Supply shortage contingency plans"
-        },
-        7: {
-            1: "Final containment verification protocols",
-            2: "Post-outbreak surveillance planning",
-            3: "Declaring outbreak contained or escalating",
-            4: "Evaluating response effectiveness",
-            5: "Preparing for potential resurgence"
-        }
-    }
-
-    # Get specific theme for this question
-    theme = day_question_themes.get(day, {}).get(question_num, "outbreak response")
-
-    # Build context from recent decisions
-    recent_context = ""
-    if history:
-        recent = history[-2:]  # Last 2 decisions
-        recent_context = "Recent player decisions: " + " | ".join([
-            f"Day{h['day']}-Q{h['q']}: chose {h['choice']}" for h in recent
-        ])
-
-    # Add unique seed based on day and question to force variation
-    unique_seed = f"SEED_{day}_{question_num}"
-
-    prompt = f"""Generate question {question_num} of 5 for Day {day} of 7.
-
-CONTEXT:
-- Virus: {virus_data.get('virus_name', 'Unknown')}
-- Real virus basis: {virus_data.get('real_virus', 'Unknown')}
-- Transmission: {virus_data.get('transmission', 'Unknown')}
-- Location: {virus_data.get('location', 'Unknown')}
-- SPECIFIC THEME: {theme}
-- Unique identifier: {unique_seed}
-{recent_context}
-
-CRITICAL REQUIREMENTS:
-1. This question MUST be about: {theme}
-2. Make it DIFFERENT from previous questions
-3. Question {question_num} should build on earlier choices
-4. Use SHORT sentences (max 15 words each)
-5. Vary which answer (A/B/C/D) is correct - DO NOT always make A or B the best
-6. Keep realistic to the specific theme above
-
-Return ONLY this JSON:
-{{
-  "scenario": "Two sentences about {theme}",
-  "question": "Specific question about {theme}",
-  "choices": [
-    {{"id": "A", "text": "First option related to {theme}"}},
-    {{"id": "B", "text": "Second option related to {theme}"}},
-    {{"id": "C", "text": "Third option related to {theme}"}},
-    {{"id": "D", "text": "Fourth option related to {theme}"}}
-  ],
-  "correct": "Randomly pick A B C or D",
-  "choice_ratings": {{"A": "rate each", "B": "rate each", "C": "rate each", "D": "rate each"}},
-  "educational_note": "One fact about {theme}"
-}}"""
-
-    try:
-        result = call_gemini(prompt, max_tokens=2500)
-        
-        if not result.strip().endswith('}'):
-            print("⚠️ Response truncated, attempting repair...")
-            result = result.strip()
-            if result.count('{') > result.count('}'):
-                missing = result.count('{') - result.count('}')
-                result += '}' * missing
-        
-        data = safe_json(result)
-        
-        # Validate
-        required = ['scenario', 'question', 'choices', 'correct', 'choice_ratings']
-        for field in required:
-            if field not in data:
-                raise ValueError(f"Missing field: {field}")
-        
-        if 'educational_note' not in data:
-            data['educational_note'] = f"This decision relates to {theme}."
-        
-        return jsonify({"success": True, "data": data})
-        
-    except Exception as e:
-        print(f"❌ Error in get_question: {e}")
-        
-        # Fallback with themed question
-        fallback_question = {
-            "scenario": f"Day {day}, Question {question_num}: {theme}. A critical decision is needed.",
-            "question": f"How do you address this situation regarding {theme}?",
-            "choices": [
-                {"id": "A", "text": "Implement immediate aggressive measures"},
-                {"id": "B", "text": "Gather more data before deciding"},
-                {"id": "C", "text": "Follow standard protocol guidelines"},
-                {"id": "D", "text": "Consult with international experts"}
-            ],
-            "correct": "C",
-            "choice_ratings": {"A": "poor", "B": "good", "C": "excellent", "D": "good"},
-            "educational_note": f"Effective response to {theme} requires evidence-based decisions."
-        }
-        return jsonify({"success": True, "data": fallback_question})
+# ═══════════════════════════════════════════════════════
+# HELPER FUNCTIONS (MUST BE DEFINED BEFORE USE!)
+# ═══════════════════════════════════════════════════════
 
 def repair_json(text):
     """Attempt to repair common JSON issues"""
@@ -256,6 +69,50 @@ def safe_json(text):
     raise ValueError(f"Could not parse JSON: {text[:200]}")
 
 
+def call_gemini(prompt, max_tokens=1000):
+    """Call Gemini API with the given prompt"""
+    full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}\n\nReturn ONLY valid JSON with no extra text."
+    
+    try:
+        response = model.generate_content(
+            full_prompt,
+            generation_config=genai.types.GenerationConfig(
+                max_output_tokens=max_tokens,
+                temperature=0.8,
+            )
+        )
+        
+        # Check if response was blocked
+        if not response.text:
+            print("⚠️ Empty response from Gemini")
+            raise ValueError("Empty response from API")
+        
+        text = response.text.strip()
+        print(f"🤖 AI Response length: {len(text)} chars")
+        
+        # Check if response seems truncated
+        if not text.endswith('}'):
+            print(f"⚠️ Response appears truncated (doesn't end with }})")
+            last_brace = text.rfind('}')
+            if last_brace > 0:
+                text = text[:last_brace+1]
+        
+        # Strip markdown
+        text = re.sub(r'^```json\s*', '', text)
+        text = re.sub(r'^```\s*', '', text)
+        text = re.sub(r'\s*```$', '', text)
+        
+        return text
+        
+    except Exception as e:
+        print(f"❌ Gemini API Error: {e}")
+        raise
+
+
+# ═══════════════════════════════════════════════════════
+# FLASK ROUTES
+# ═══════════════════════════════════════════════════════
+
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -267,7 +124,7 @@ def start_game():
 Choose one real virus as inspiration from this list: Ebola, COVID-19, Influenza H1N1, Smallpox, SARS-CoV-1, Zika, Marburg, Nipah, Rabies, or Dengue Fever.
 Create a FICTIONAL virus name (dramatic, scientific-sounding, NOT the real name).
 
-Return this exact JSON:
+Return ONLY this JSON (no extra text):
 {
   "virus_name": "fictional dramatic virus name",
   "real_virus": "the real virus this scenario is inspired by",
@@ -282,10 +139,125 @@ Return this exact JSON:
   "day1_briefing": "Your mission briefing as lead scientist — 2 engaging sentences about what you must do"
 }"""
 
-    result = call_gemini(prompt)
-    data = safe_json(result)
-    return jsonify({"success": True, "data": data})
+    try:
+        result = call_gemini(prompt)
+        data = safe_json(result)
+        return jsonify({"success": True, "data": data})
+    except Exception as e:
+        print(f"❌ Error in start_game: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
+
+@app.route('/api/question', methods=['POST'])
+def get_question():
+    body = request.json
+    virus_data = body.get('virus_data', {})
+    day = body.get('day', 1)
+    question_num = body.get('question_num', 1)
+    history = body.get('history', [])
+
+    # Different themes for each day
+    day_themes = {
+        1: "Initial outbreak detection, field epidemiology, and rapid diagnostic testing",
+        2: "Quarantine strategies, contact tracing networks, and isolation protocols",
+        3: "Clinical treatment approaches, hospital capacity planning, and triage systems",
+        4: "Public health communication, media management, and community education",
+        5: "Resource mobilization, international cooperation, and supply chain logistics",
+        6: "Addressing complications: mutations, secondary infections, and system strain",
+        7: "Final containment measures, surveillance planning, and outbreak resolution"
+    }
+
+    # Build context from recent decisions
+    recent_context = ""
+    if history:
+        recent = history[-2:]
+        recent_context = "\nRecent decisions: " + "; ".join([
+            f"Day {h['day']} Q{h['q']}: chose option {h['choice']}" for h in recent
+        ])
+
+    theme = day_themes.get(day, "outbreak response")
+
+    prompt = f"""Generate question {question_num} of 5 for Day {day} of the 7-day outbreak simulation.
+
+OUTBREAK CONTEXT:
+- Virus: {virus_data.get('virus_name', 'Unknown')}
+- Based on: {virus_data.get('real_virus', 'Unknown')}
+- Transmission: {virus_data.get('transmission', 'Unknown')}
+- Location: {virus_data.get('location', 'Unknown')}
+- Day {day} Theme: {theme}
+{recent_context}
+
+INSTRUCTIONS:
+1. Create a scenario (2 sentences) that describes a specific crisis related to {theme}
+2. Make the question tactical and specific to this situation
+3. Provide 4 distinct choices (A, B, C, D) - each should be a complete strategy
+4. VARY which choice is correct - don't always pick A or B
+5. Rate each choice: "excellent" (best), "good" (acceptable), "poor" (flawed), or "terrible" (dangerous)
+6. Include one real epidemiology/virology fact as educational note
+
+Return ONLY this JSON:
+{{
+  "scenario": "2 sentences describing the specific crisis situation for {theme}",
+  "question": "What is your decision in response to this situation?",
+  "choices": [
+    {{"id": "A", "text": "Complete detailed strategy option A"}},
+    {{"id": "B", "text": "Complete detailed strategy option B"}},
+    {{"id": "C", "text": "Complete detailed strategy option C"}},
+    {{"id": "D", "text": "Complete detailed strategy option D"}}
+  ],
+  "correct": "A or B or C or D (the scientifically best choice)",
+  "choice_ratings": {{
+    "A": "excellent or good or poor or terrible",
+    "B": "excellent or good or poor or terrible",
+    "C": "excellent or good or poor or terrible",
+    "D": "excellent or good or poor or terrible"
+  }},
+  "educational_note": "Real scientific fact about virology or epidemiology related to {theme}"
+}}"""
+
+    try:
+        result = call_gemini(prompt, max_tokens=2500)
+        
+        # Handle truncation
+        if not result.strip().endswith('}'):
+            print("⚠️ Response truncated, attempting repair...")
+            result = result.strip()
+            if result.count('{') > result.count('}'):
+                missing = result.count('{') - result.count('}')
+                result += '}' * missing
+        
+        data = safe_json(result)
+        
+        # Validate required fields
+        required = ['scenario', 'question', 'choices', 'correct', 'choice_ratings']
+        for field in required:
+            if field not in data:
+                raise ValueError(f"Missing field: {field}")
+        
+        # Add educational note if missing
+        if 'educational_note' not in data:
+            data['educational_note'] = f"Scientific decision-making is critical in {theme}."
+        
+        return jsonify({"success": True, "data": data})
+        
+    except Exception as e:
+        print(f"❌ Error in get_question: {e}")
+        
+        # Emergency fallback
+        fallback = {
+            "scenario": f"Day {day}: A critical situation has emerged related to {theme}. Your team needs immediate direction on how to proceed.",
+            "question": "What action should you take?",
+            "choices": [
+                {"id": "A", "text": "Implement aggressive containment measures immediately"},
+                {"id": "B", "text": "Gather more epidemiological data before acting"},
+                {"id": "C", "text": "Follow established public health protocols"},
+                {"id": "D", "text": "Coordinate with international health organizations"}
+            ],
+            "correct": "C",
+            "choice_ratings": {"A": "good", "B": "good", "C": "excellent", "D": "good"},
+            "educational_note": f"Evidence-based protocols are essential in {theme}."
+        }
+        return jsonify({"success": True, "data": fallback})
 
 
 @app.route('/api/feedback', methods=['POST'])
@@ -293,34 +265,78 @@ def get_feedback():
     body = request.json
     choice_id = body.get('choice')
     question_data = body.get('question_data', {})
-    rating = question_data.get('choice_ratings', {}).get(choice_id, 'poor')
 
+    # Get the rating for the chosen answer
+    rating = question_data.get('choice_ratings', {}).get(choice_id, 'poor')
+    
+    # Calculate score change
     score_map = {"excellent": 15, "good": 8, "poor": -8, "terrible": -15}
     base_score = score_map.get(rating, 0)
 
-    # Pre-written feedback (no AI needed!)
-    feedback_templates = {
-        "excellent": "This was an excellent decision that follows best practices in epidemiology and outbreak response.",
-        "good": "This was a solid choice that aligns with standard public health protocols.",
-        "poor": "This choice had some flaws and may not be optimal for containing the outbreak effectively.",
-        "terrible": "This was a problematic decision that could worsen the outbreak situation significantly."
-    }
-    
-    effect_templates = {
-        "excellent": "Your swift and scientifically-sound action helped slow viral transmission.",
-        "good": "Your decision contributed positively to containment efforts.",
-        "poor": "Your decision created some setbacks in the containment strategy.",
-        "terrible": "Your choice allowed the virus to spread more rapidly."
-    }
+    print(f"🎯 Choice {choice_id} rated as '{rating}' → score change: {base_score}")
 
-    data = {
-        "result": rating.upper(),
-        "score_change": base_score,
-        "feedback": feedback_templates.get(rating, "Decision recorded."),
-        "containment_effect": effect_templates.get(rating, "The outbreak continues.")
-    }
+    # Get choices for context
+    choices = question_data.get('choices', [])
+    chosen = next((c for c in choices if c['id'] == choice_id), None)
+    correct_id = question_data.get('correct', 'A')
     
-    return jsonify({"success": True, "data": data})
+    # Generate AI feedback
+    prompt = f"""The player chose option {choice_id} which was rated as "{rating}".
+
+Question: {question_data.get('question', '')}
+Their choice: {chosen['text'] if chosen else 'unknown'}
+Best answer was: {correct_id}
+
+Generate feedback explaining why this choice was {rating}.
+
+Return ONLY this JSON:
+{{
+  "result": "{rating.upper()}",
+  "score_change": {base_score},
+  "feedback": "2-3 sentences explaining WHY this choice was {rating} from an epidemiological perspective",
+  "containment_effect": "One sentence about how this decision affected the outbreak trajectory"
+}}"""
+
+    try:
+        result = call_gemini(prompt, max_tokens=800)
+        data = safe_json(result)
+        
+        # CRITICAL: Ensure score_change is correctly set
+        data['score_change'] = base_score
+        data['result'] = rating.upper()
+        
+        print(f"✅ Returning feedback with score_change: {data['score_change']}")
+        
+        return jsonify({"success": True, "data": data})
+        
+    except Exception as e:
+        print(f"❌ Error in get_feedback: {e}")
+        
+        # Fallback response
+        feedback_text = {
+            "excellent": "Outstanding decision! This follows evidence-based epidemiological protocols.",
+            "good": "Solid choice that aligns with public health best practices.",
+            "poor": "This decision has significant drawbacks that may hinder containment.",
+            "terrible": "Critical error! This contradicts fundamental outbreak response principles."
+        }
+        
+        effect_text = {
+            "excellent": "Your swift action significantly slowed viral transmission.",
+            "good": "Your decision contributed to gradual containment improvement.",
+            "poor": "Your choice created setbacks in the response strategy.",
+            "terrible": "Your decision enabled rapid viral spread."
+        }
+        
+        fallback = {
+            "result": rating.upper(),
+            "score_change": base_score,
+            "feedback": feedback_text.get(rating, "Decision recorded."),
+            "containment_effect": effect_text.get(rating, "The outbreak continues.")
+        }
+        
+        print(f"✅ Using fallback with score_change: {fallback['score_change']}")
+        
+        return jsonify({"success": True, "data": fallback})
 
 
 @app.route('/api/end', methods=['POST'])
@@ -344,12 +360,12 @@ FINAL SCORE: {total_score}/100
 OUTCOME: {outcome}
 DECISION LOG: {history_summary}
 
-Return this exact JSON:
+Return ONLY this JSON:
 {{
   "outcome": "{outcome}",
-  "headline": "Dramatic one-sentence news headline about the outcome",
+  "headline": "Dramatic one-sentence news headline about the {outcome.lower()}",
   "evaluation": "3-4 sentences evaluating the player's overall strategy and performance",
-  "key_mistakes": ["specific mistake 1 if score < 80, else empty string", "specific mistake 2 if score < 70, else empty string"],
+  "key_mistakes": ["specific mistake 1 if score < 80", "specific mistake 2 if score < 70"],
   "key_successes": ["specific success 1", "specific success 2"],
   "real_world_virus_info": {{
     "name": "{virus_data.get('real_virus')}",
@@ -361,9 +377,13 @@ Return this exact JSON:
   }}
 }}"""
 
-    result = call_gemini(prompt, max_tokens=1500)
-    data = safe_json(result)
-    return jsonify({"success": True, "data": data})
+    try:
+        result = call_gemini(prompt, max_tokens=2000)
+        data = safe_json(result)
+        return jsonify({"success": True, "data": data})
+    except Exception as e:
+        print(f"❌ Error in end_game: {e}")
+        return jsonify({"success": False, "error": str(e)}), 500
 
 
 if __name__ == '__main__':
