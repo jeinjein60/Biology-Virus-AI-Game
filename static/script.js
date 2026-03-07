@@ -156,7 +156,7 @@ function initDayDots() {
 
   const qContainer = document.getElementById('q-dots');
   qContainer.innerHTML = '';
-  for (let q = 1; q <= 5; q++) {
+  for (let q = 1; q <= 3; q++) {
     const dot = document.createElement('div');
     dot.className = 'q-dot ' + (q < state.questionNum ? 'done' : q === state.questionNum ? 'current' : '');
     dot.id = 'q-dot-' + q;
@@ -173,7 +173,7 @@ function updateDots() {
     if (!dot) continue;
     dot.className = 'day-dot ' + (d < state.day ? 'done' : d === state.day ? 'current' : 'future');
   }
-  for (let q = 1; q <= 5; q++) {
+  for (let q = 1; q <= 3; q++) {
     const dot = document.getElementById('q-dot-' + q);
     if (!dot) continue;
     dot.className = 'q-dot ' + (q < state.questionNum ? 'done' : q === state.questionNum ? 'current' : '');
@@ -207,7 +207,7 @@ async function loadQuestion() {
 
 function renderQuestion(data) {
   document.getElementById('q-meta').textContent =
-    `DAY ${state.day} — QUESTION ${state.questionNum} OF 5 — ${(DAY_THEMES[state.day] || '').toUpperCase()}`;
+    `DAY ${state.day} — QUESTION ${state.questionNum} OF 3 — ${(DAY_THEMES[state.day] || '').toUpperCase()}`;
   document.getElementById('q-scenario').textContent = data.scenario;
   document.getElementById('q-text').textContent = data.question;
   document.getElementById('edu-note').textContent = data.educational_note;
@@ -290,7 +290,7 @@ async function getFeedback(choiceId, choiceText) {
     document.getElementById('modal-effect').textContent = fb.containment_effect || '';
 
     // Check if last question of last day
-    const isLastQuestion = (state.day === 7 && state.questionNum === 5);
+    const isLastQuestion = (state.day === 7 && state.questionNum === 3);
     document.getElementById('modal-next-btn').textContent =
       isLastQuestion ? '▶ VIEW FINAL REPORT' : '▶ NEXT';
 
@@ -321,14 +321,14 @@ function addHistoryEntry(choiceId, choiceText, scoreChange, result) {
 function dismissFeedback() {
   document.getElementById('feedback-modal').classList.remove('open');
 
-  const isLastQuestion = (state.day === 7 && state.questionNum === 5);
+  const isLastQuestion = (state.day === 7 && state.questionNum === 3);
 
   if (isLastQuestion) {
     showGameOver();
     return;
   }
 
-  if (state.questionNum === 5) {
+  if (state.questionNum === 3) {
     // End of day — transition
     const nextDay = state.day + 1;
     state.day = nextDay;

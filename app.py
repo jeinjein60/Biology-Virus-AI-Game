@@ -6,16 +6,15 @@ import os
 
 app = Flask(__name__)
 
-# Configure Gemini - PUT YOUR API KEY HERE
-genai.configure(api_key=os.environ.get("AIzaSyCdivLcF1GkvUW0lGPczZ68Qp94h3JmBOg"))
+genai.configure(api_key=os.environ.get("GEMINI_API_KEY")) #API Key
 
-# Automatically find an available model
 available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
 if not available_models:
     raise Exception("No models available! Check your API key.")
 
+# Make sure to use the latest
 model_name = available_models[0]
-print(f"✅ Using model: {model_name}")
+print(f"Using model: {model_name}")
 model = genai.GenerativeModel(model_name)
 
 SYSTEM_PROMPT = """You are the AI director for OUTBREAK RESPONSE, a biology education simulation game for students.
@@ -23,10 +22,7 @@ You generate scientifically accurate, engaging content about virology and epidem
 Always respond with valid JSON only — no markdown, no code fences, no extra text outside the JSON."""
 
 
-# ═══════════════════════════════════════════════════════
-# HELPER FUNCTIONS (MUST BE DEFINED BEFORE USE!)
-# ═══════════════════════════════════════════════════════
-
+#function to fix json issues, like truncation, markdown, or formatting problems
 def repair_json(text):
     """Attempt to repair common JSON issues"""
     start = text.find('{')
@@ -34,20 +30,18 @@ def repair_json(text):
     if start != -1 and end != -1:
         text = text[start:end+1]
     
-    # Replace smart quotes
     text = text.replace('"', '"').replace('"', '"')
     
-    # Remove actual line breaks inside JSON strings
     def fix_string(match):
         return match.group(0).replace('\n', ' ').replace('\r', ' ')
     text = re.sub(r'"[^"]*"', fix_string, text)
     
-    # Remove trailing commas
     text = re.sub(r',\s*([}\]])', r'\1', text)
     
     return text
 
 
+#error handling for json parsing with multiple attempts to fix common issues
 def safe_json(text):
     """Safely parse JSON with multiple repair attempts"""
     attempts = [
@@ -65,11 +59,11 @@ def safe_json(text):
             print(f"⚠️ {name} parse failed: {e}")
             continue
     
-    print(f"❌ JSON parsing failed! Response:\n{text[:500]}")
+    print(f"JSON parsing failed! Response:\n{text[:500]}")
     raise ValueError(f"Could not parse JSON: {text[:200]}")
 
 
-def call_gemini(prompt, max_tokens=1000):
+def call_gemini(prompt, max_tokens=2000):
     """Call Gemini API with the given prompt"""
     full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}\n\nReturn ONLY valid JSON with no extra text."
     
@@ -82,22 +76,21 @@ def call_gemini(prompt, max_tokens=1000):
             )
         )
         
-        # Check if response was blocked
+        #degugging gemini calling
         if not response.text:
-            print("⚠️ Empty response from Gemini")
+            print("Empty response from Gemini")
             raise ValueError("Empty response from API")
         
+        #terminal debugging for response length and truncation
         text = response.text.strip()
         print(f"🤖 AI Response length: {len(text)} chars")
         
-        # Check if response seems truncated
         if not text.endswith('}'):
             print(f"⚠️ Response appears truncated (doesn't end with }})")
             last_brace = text.rfind('}')
             if last_brace > 0:
                 text = text[:last_brace+1]
-        
-        # Strip markdown
+    
         text = re.sub(r'^```json\s*', '', text)
         text = re.sub(r'^```\s*', '', text)
         text = re.sub(r'\s*```$', '', text)
@@ -109,15 +102,13 @@ def call_gemini(prompt, max_tokens=1000):
         raise
 
 
-# ═══════════════════════════════════════════════════════
 # FLASK ROUTES
-# ═══════════════════════════════════════════════════════
-
 @app.route('/')
 def index():
     return render_template('index.html')
 
 
+#starting the game by generating a virus
 @app.route('/api/start', methods=['POST'])
 def start_game():
     prompt = """Generate a virus outbreak scenario for the game. 
@@ -144,7 +135,7 @@ Return ONLY this JSON (no extra text):
         data = safe_json(result)
         return jsonify({"success": True, "data": data})
     except Exception as e:
-        print(f"❌ Error in start_game: {e}")
+        print(f"Error in start_game: {e}")
         return jsonify({"success": False, "error": str(e)}), 500
 
 
@@ -157,14 +148,15 @@ def get_question():
     history = body.get('history', [])
 
     # Different themes for each day
+    # Change later
     day_themes = {
-        1: "Initial outbreak detection, field epidemiology, and rapid diagnostic testing",
-        2: "Quarantine strategies, contact tracing networks, and isolation protocols",
+        1: "Initial outbreak detection and rapid diagnostic testing",
+        2: "Quarantine strategies and isolation protocols",
         3: "Clinical treatment approaches, hospital capacity planning, and triage systems",
-        4: "Public health communication, media management, and community education",
+        4: "Public health communication, media management, and ethical dilemmas",
         5: "Resource mobilization, international cooperation, and supply chain logistics",
         6: "Addressing complications: mutations, secondary infections, and system strain",
-        7: "Final containment measures, surveillance planning, and outbreak resolution"
+        7: "Final containment measures and outbreak resolution"
     }
 
     # Build context from recent decisions
@@ -177,7 +169,7 @@ def get_question():
 
     theme = day_themes.get(day, "outbreak response")
 
-    prompt = f"""Generate question {question_num} of 5 for Day {day} of the 7-day outbreak simulation.
+    prompt = f"""Generate question {question_num} of 3 for Day {day} of the 7-day outbreak simulation.
 
 OUTBREAK CONTEXT:
 - Virus: {virus_data.get('virus_name', 'Unknown')}
@@ -188,31 +180,31 @@ OUTBREAK CONTEXT:
 {recent_context}
 
 INSTRUCTIONS:
-1. Create a scenario (2 sentences) that describes a specific crisis related to {theme}
-2. Make the question tactical and specific to this situation
-3. Provide 4 distinct choices (A, B, C, D) - each should be a complete strategy
+1. Create a SHORT scenario (1-2 sentences, max 15 words total)
+2. Keep the question direct and clear
+3. Provide 4 distinct choices (A, B, C, D) - each 10-15 words max
 4. VARY which choice is correct - don't always pick A or B
-5. Rate each choice: "excellent" (best), "good" (acceptable), "poor" (flawed), or "terrible" (dangerous)
-6. Include one real epidemiology/virology fact as educational note
+5. Rate each choice: "excellent", "good", "poor", or "terrible"
+6. Include one brief science fact (under 20 words)
 
 Return ONLY this JSON:
 {{
-  "scenario": "2 sentences describing the specific crisis situation for {theme}",
-  "question": "What is your decision in response to this situation?",
+  "scenario": "1-2 short sentences about {theme} (max 25 words total)",
+  "question": "What is your decision?",
   "choices": [
-    {{"id": "A", "text": "Complete detailed strategy option A"}},
-    {{"id": "B", "text": "Complete detailed strategy option B"}},
-    {{"id": "C", "text": "Complete detailed strategy option C"}},
-    {{"id": "D", "text": "Complete detailed strategy option D"}}
+    {{"id": "A", "text": "Brief strategy A (10-15 words)"}},
+    {{"id": "B", "text": "Brief strategy B (10-15 words)"}},
+    {{"id": "C", "text": "Brief strategy C (10-15 words)"}},
+    {{"id": "D", "text": "Brief strategy D (10-15 words)"}}
   ],
-  "correct": "A or B or C or D (the scientifically best choice)",
+  "correct": "A or B or C or D",
   "choice_ratings": {{
     "A": "excellent or good or poor or terrible",
     "B": "excellent or good or poor or terrible",
     "C": "excellent or good or poor or terrible",
     "D": "excellent or good or poor or terrible"
   }},
-  "educational_note": "Real scientific fact about virology or epidemiology related to {theme}"
+  "educational_note": "One brief science fact (under 20 words)"
 }}"""
 
     try:
@@ -241,9 +233,8 @@ Return ONLY this JSON:
         return jsonify({"success": True, "data": data})
         
     except Exception as e:
-        print(f"❌ Error in get_question: {e}")
+        print(f" Error in get_question: {e}")
         
-        # Emergency fallback
         fallback = {
             "scenario": f"Day {day}: A critical situation has emerged related to {theme}. Your team needs immediate direction on how to proceed.",
             "question": "What action should you take?",
@@ -270,9 +261,11 @@ def get_feedback():
     rating = question_data.get('choice_ratings', {}).get(choice_id, 'poor')
     
     # Calculate score change
-    score_map = {"excellent": 15, "good": 8, "poor": -8, "terrible": -15}
+    score_map = {"excellent": 10, "good": 8, "poor": -8, "terrible": -10}
     base_score = score_map.get(rating, 0)
 
+    
+    # Debugging output for feedback scoring
     print(f"🎯 Choice {choice_id} rated as '{rating}' → score change: {base_score}")
 
     # Get choices for context
