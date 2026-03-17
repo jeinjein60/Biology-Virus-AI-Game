@@ -376,7 +376,102 @@ Return ONLY this JSON:
         return jsonify({"success": True, "data": data})
     except Exception as e:
         print(f"❌ Error in end_game: {e}")
-        return jsonify({"success": False, "error": str(e)}), 500
+        
+        # Fallback response
+        fallback = {
+            "outcome": outcome,
+            "headline": f"Outbreak Response: {outcome}",
+            "evaluation": "Your response to the outbreak has concluded. The simulation has ended based on your strategic decisions over the 7-day period.",
+            "key_successes": ["Completed the simulation", "Made strategic decisions"],
+            "key_mistakes": ["Review your decisions for improvement"],
+            "real_world_virus_info": {
+                "name": virus_data.get('real_virus', 'Unknown Virus'),
+                "overview": "This virus is a real pathogen studied by epidemiologists worldwide.",
+                "historical_outbreaks": "This virus has caused significant outbreaks throughout history.",
+                "real_containment": "Real containment strategies involve quarantine, testing, and vaccination.",
+                "vaccines_treatments": "Medical professionals continue to develop treatments.",
+                "interesting_fact": "Viruses evolve and adapt, making containment a dynamic challenge."
+            }
+        }
+        
+        return jsonify({"success": True, "data": fallback})
+
+
+@app.route('/api/chat', methods=['POST'])
+def chat_with_ai():
+    body = request.json or {}
+    message = (body.get('message') or '').strip()
+    context = body.get('context', {}) or {}
+    chat_history = body.get('chat_history', []) or []
+
+    if not message:
+        return jsonify({"success": False, "error": "Message is required"}), 400
+
+    history_lines = []
+    for item in chat_history[-8:]:
+        role = item.get('role', 'user').upper()
+        text = item.get('text', '').strip()
+        if text:
+            history_lines.append(f"{role}: {text}")
+
+    history_text = "\n".join(history_lines) if history_lines else "No prior chat messages."
+
+    virus_name = context.get('virus_name', 'Unknown Virus')
+    real_virus = context.get('real_virus', 'Unknown real-virus inspiration')
+    transmission = context.get('transmission', 'Unknown')
+    symptoms = context.get('symptoms', [])
+    location = context.get('location', 'Unknown')
+    day = context.get('day', 1)
+    question_num = context.get('question_num', 1)
+    score = context.get('score', 50)
+    current_question = context.get('current_question') or {}
+    recent_history = context.get('history', []) or []
+
+    prompt = f"""You are the in-game biology helper for a student playing OUTBREAK RESPONSE.
+
+CURRENT GAME CONTEXT:
+- Fictional virus: {virus_name}
+- Inspired by: {real_virus}
+- Transmission: {transmission}
+- Symptoms: {", ".join(symptoms) if symptoms else "Unknown"}
+- Location: {location}
+- Day: {day}
+- Question number: {question_num}
+- Containment score: {score}/100
+- Current scenario: {current_question.get('scenario', 'Not available')}
+- Current question: {current_question.get('question', 'Not available')}
+- Recent decisions: {json.dumps(recent_history)}
+
+CHAT HISTORY:
+{history_text}
+
+STUDENT MESSAGE:
+{message}
+
+INSTRUCTIONS:
+1. Answer like a helpful biology tutor during the game.
+2. Keep it concise: 2-4 sentences.
+3. Be scientifically grounded and age-appropriate.
+4. Do not reveal hidden answer labels like "A" or "B" unless the student explicitly asks to compare options.
+5. If discussing strategy, guide the student toward reasoning, tradeoffs, and epidemiology concepts.
+
+Return ONLY this JSON:
+{{
+  "reply": "Short helpful response for the student"
+}}"""
+
+    try:
+        result = call_gemini(prompt, max_tokens=500)
+        data = safe_json(result)
+        return jsonify({"success": True, "data": {"reply": data.get("reply", "").strip()}})
+    except Exception as e:
+        print(f"❌ Error in chat_with_ai: {e}")
+
+        fallback_reply = (
+            f"{virus_name} appears to spread through {transmission.lower() if isinstance(transmission, str) else 'unknown pathways'}, "
+            "so focus on containment steps that reduce exposure, improve detection, and protect vulnerable groups."
+        )
+        return jsonify({"success": True, "data": {"reply": fallback_reply}})
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))

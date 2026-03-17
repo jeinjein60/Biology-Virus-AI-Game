@@ -67,6 +67,8 @@ outbreak_game/
 ├── app.py                  ← Flask backend + Gemini AI logic
 ├── requirements.txt        ← Python dependencies
 ├── README.md               ← This file
+└── static/
+    └── script.js
 └── templates/
     └── index.html          ← Full game frontend (HTML/CSS/JS)
 ```
