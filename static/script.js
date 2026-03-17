@@ -90,10 +90,10 @@ async function startGame() {
 
     state.virusData = result.data;
     
-    // setTimeout(() => {
-    //   populateBriefing(state.virusData);
-    //   openBriefing();
-    // }, 2000);
+    setTimeout(() => {
+      populateBriefing(state.virusData);
+      openBriefing();
+    }, 2000);
   } catch (e) {
     alert('Error starting game. Check console.');
     console.error(e);
