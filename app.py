@@ -1,21 +1,14 @@
 from flask import Flask, render_template, request, jsonify
-import google.generativeai as genai
+from openai import OpenAI
 import json
 import re
 import os
 
 app = Flask(__name__)
 
-genai.configure(api_key=os.environ.get("GEMINI_API_KEY")) #API Key
-
-available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-if not available_models:
-    raise Exception("No models available! Check your API key.")
-
-# Make sure to use the latest
-model_name = available_models[0]
+client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))  #API Key
+model_name = "gpt-4o-mini"
 print(f"Using model: {model_name}")
-model = genai.GenerativeModel(model_name)
 
 SYSTEM_PROMPT = """You are the AI director for OUTBREAK RESPONSE, a biology education simulation game for students.
 You generate scientifically accurate, engaging content about virology and epidemiology.
@@ -63,42 +56,41 @@ def safe_json(text):
     raise ValueError(f"Could not parse JSON: {text[:200]}")
 
 
-def call_gemini(prompt, max_tokens=2000):
-    """Call Gemini API with the given prompt"""
-    full_prompt = f"{SYSTEM_PROMPT}\n\n{prompt}\n\nReturn ONLY valid JSON with no extra text."
-    
+def call_openai(prompt, max_tokens=2000):
+    """Call OpenAI API with the given prompt"""
     try:
-        response = model.generate_content(
-            full_prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=max_tokens,
-                temperature=0.8,
-            )
+        response = client.chat.completions.create(
+            model=model_name,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt + "\n\nReturn ONLY valid JSON with no extra text."}
+            ],
+            max_tokens=max_tokens,
+            temperature=0.8,
         )
-        
-        #degugging gemini calling
-        if not response.text:
-            print("Empty response from Gemini")
+
+        text = response.choices[0].message.content
+        if not text:
+            print("Empty response from OpenAI")
             raise ValueError("Empty response from API")
-        
-        #terminal debugging for response length and truncation
-        text = response.text.strip()
+
+        text = text.strip()
         print(f"🤖 AI Response length: {len(text)} chars")
-        
+
         if not text.endswith('}'):
             print(f"⚠️ Response appears truncated (doesn't end with }})")
             last_brace = text.rfind('}')
             if last_brace > 0:
                 text = text[:last_brace+1]
-    
+
         text = re.sub(r'^```json\s*', '', text)
         text = re.sub(r'^```\s*', '', text)
         text = re.sub(r'\s*```$', '', text)
-        
+
         return text
-        
+
     except Exception as e:
-        print(f"❌ Gemini API Error: {e}")
+        print(f"❌ OpenAI API Error: {e}")
         raise
 
 
@@ -131,7 +123,7 @@ Return ONLY this JSON (no extra text):
 }"""
 
     try:
-        result = call_gemini(prompt)
+        result = call_openai(prompt)
         data = safe_json(result)
         return jsonify({"success": True, "data": data})
     except Exception as e:
@@ -208,7 +200,7 @@ Return ONLY this JSON:
 }}"""
 
     try:
-        result = call_gemini(prompt, max_tokens=2500)
+        result = call_openai(prompt, max_tokens=2500)
         
         # Handle truncation
         if not result.strip().endswith('}'):
@@ -291,7 +283,7 @@ Return ONLY this JSON:
 }}"""
 
     try:
-        result = call_gemini(prompt, max_tokens=800)
+        result = call_openai(prompt, max_tokens=800)
         data = safe_json(result)
         
         # CRITICAL: Ensure score_change is correctly set
@@ -371,7 +363,7 @@ Return ONLY this JSON:
 }}"""
 
     try:
-        result = call_gemini(prompt, max_tokens=2000)
+        result = call_openai(prompt, max_tokens=2000)
         data = safe_json(result)
         return jsonify({"success": True, "data": data})
     except Exception as e:
@@ -461,7 +453,7 @@ Return ONLY this JSON:
 }}"""
 
     try:
-        result = call_gemini(prompt, max_tokens=500)
+        result = call_openai(prompt, max_tokens=500)
         data = safe_json(result)
         return jsonify({"success": True, "data": {"reply": data.get("reply", "").strip()}})
     except Exception as e:
