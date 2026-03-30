@@ -10,7 +10,9 @@ let state = {
   history: [],
   currentQuestion: null,
   selectedChoice: null,
-  chatHistory: []
+  chatHistory: [],
+  dayQuestions: null,       // cached {q1, q2, q3} for current day
+  dayQuestionsFetching: null // in-flight prefetch promise
 };
 
 const chatUiState = {
@@ -61,6 +63,7 @@ function startGameFromBriefing() {
   populateSidebar();
   initDayDots();
   showScreen('game');
+  prefetchDayQuestions();
   loadQuestion();
 }
 
@@ -134,11 +137,29 @@ function updateDots() {
     dot.className = 'day-dot ' + (d < state.day ? 'done' : d === state.day ? 'current' : '');
   }
   
-  for (let q = 1; q <= 3; q++) {
+  for (let q = 1; q <= 2; q++) {
     const dot = document.getElementById('q-dot-' + q);
     if (!dot) continue;
     dot.className = 'q-dot ' + (q < state.questionNum ? 'done' : q === state.questionNum ? 'current' : '');
   }
+}
+
+function prefetchDayQuestions() {
+  state.dayQuestions = null;
+  state.dayQuestionsFetching = api('/api/day_questions', {
+    virus_data: state.virusData,
+    day: state.day,
+    history: state.history
+  }).then(result => {
+    if (result.success) {
+      state.dayQuestions = result.data;
+      console.log(`✅ Pre-fetched all 3 questions for Day ${state.day}`);
+    }
+    state.dayQuestionsFetching = null;
+  }).catch(err => {
+    console.error('Prefetch failed:', err);
+    state.dayQuestionsFetching = null;
+  });
 }
 
 async function loadQuestion() {
@@ -147,6 +168,19 @@ async function loadQuestion() {
   updateDots();
 
   try {
+    // Wait for prefetch if still in-flight
+    if (state.dayQuestionsFetching) {
+      await state.dayQuestionsFetching;
+    }
+
+    const cached = state.dayQuestions && state.dayQuestions['q' + state.questionNum];
+    if (cached) {
+      state.currentQuestion = cached;
+      renderQuestion(cached);
+      return;
+    }
+
+    // Fallback: fetch individually if cache missed
     const result = await api('/api/question', {
       virus_data: state.virusData,
       day: state.day,
@@ -165,7 +199,7 @@ async function loadQuestion() {
 
 function renderQuestion(data) {
   document.getElementById('question-header').textContent = 
-    `DAY ${state.day} — QUESTION ${state.questionNum} OF 3`;
+    `DAY ${state.day} — QUESTION ${state.questionNum} OF 2`;
   document.getElementById('scenario-text').textContent = data.scenario;
   document.getElementById('question-text').textContent = data.question;
   document.getElementById('edu-note').textContent = data.educational_note;
@@ -246,14 +280,14 @@ async function getFeedback(choiceId, choiceText) {
 function dismissFeedback() {
   document.getElementById('feedback-modal').classList.remove('open');
 
-  const isLastQuestion = (state.day === 7 && state.questionNum === 3);
+  const isLastQuestion = (state.day === 7 && state.questionNum === 2);
 
   if (isLastQuestion) {
     showGameOver();
     return;
   }
 
-  if (state.questionNum === 3) {
+  if (state.questionNum === 2) {
     const nextDay = state.day + 1;
     state.day = nextDay;
     state.questionNum = 1;
@@ -272,6 +306,7 @@ function dismissFeedback() {
 function continueAfterTransition() {
   initDayDots();
   showScreen('game');
+  prefetchDayQuestions();
   loadQuestion();
 }
 

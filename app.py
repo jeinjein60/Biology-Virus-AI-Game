@@ -1,10 +1,15 @@
 from flask import Flask, render_template, request, jsonify
 from openai import OpenAI
+from concurrent.futures import ThreadPoolExecutor
+from dotenv import load_dotenv
 import json
 import re
+import random
 import os
 
+load_dotenv()
 app = Flask(__name__)
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY')
 
 client = OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))  #API Key
 model_name = "gpt-4o-mini"
@@ -131,27 +136,36 @@ Return ONLY this JSON (no extra text):
         return jsonify({"success": False, "error": str(e)}), 500
 
 
-@app.route('/api/question', methods=['POST'])
-def get_question():
-    body = request.json
-    virus_data = body.get('virus_data', {})
-    day = body.get('day', 1)
-    question_num = body.get('question_num', 1)
-    history = body.get('history', [])
+DAY_THEMES = {
+    1: "Initial outbreak detection and rapid diagnostic testing",
+    2: "Quarantine strategies and isolation protocols",
+    3: "Clinical treatment approaches, hospital capacity planning, and triage systems",
+    4: "Public health communication, media management, and ethical dilemmas",
+    5: "Resource mobilization, international cooperation, and supply chain logistics",
+    6: "Addressing complications: mutations, secondary infections, and system strain",
+    7: "Final containment measures and outbreak resolution"
+}
 
-    # Different themes for each day
-    # Change later
-    day_themes = {
-        1: "Initial outbreak detection and rapid diagnostic testing",
-        2: "Quarantine strategies and isolation protocols",
-        3: "Clinical treatment approaches, hospital capacity planning, and triage systems",
-        4: "Public health communication, media management, and ethical dilemmas",
-        5: "Resource mobilization, international cooperation, and supply chain logistics",
-        6: "Addressing complications: mutations, secondary infections, and system strain",
-        7: "Final containment measures and outbreak resolution"
+
+def build_question_fallback(day):
+    theme = DAY_THEMES.get(day, "outbreak response")
+    return {
+        "scenario": f"Day {day}: A critical situation has emerged related to {theme}. Your team needs immediate direction on how to proceed.",
+        "question": "What action should you take?",
+        "choices": [
+            {"id": "A", "text": "Implement aggressive containment measures immediately"},
+            {"id": "B", "text": "Gather more epidemiological data before acting"},
+            {"id": "C", "text": "Follow established public health protocols"},
+            {"id": "D", "text": "Coordinate with international health organizations"}
+        ],
+        "correct": "C",
+        "choice_ratings": {"A": "good", "B": "good", "C": "excellent", "D": "good"},
+        "educational_note": f"Evidence-based protocols are essential in {theme}."
     }
 
-    # Build context from recent decisions
+
+def generate_single_question(virus_data, day, question_num, history):
+    """Generate one question and return parsed data (raises on failure)."""
     recent_context = ""
     if history:
         recent = history[-2:]
@@ -159,9 +173,9 @@ def get_question():
             f"Day {h['day']} Q{h['q']}: chose option {h['choice']}" for h in recent
         ])
 
-    theme = day_themes.get(day, "outbreak response")
+    theme = DAY_THEMES.get(day, "outbreak response")
 
-    prompt = f"""Generate question {question_num} of 3 for Day {day} of the 7-day outbreak simulation.
+    prompt = f"""Generate question {question_num} of 2 for Day {day} of the 7-day outbreak simulation.
 
 OUTBREAK CONTEXT:
 - Virus: {virus_data.get('virus_name', 'Unknown')}
@@ -199,48 +213,65 @@ Return ONLY this JSON:
   "educational_note": "One brief science fact (under 20 words)"
 }}"""
 
+    result = call_openai(prompt, max_tokens=2500)
+
+    if not result.strip().endswith('}'):
+        print("⚠️ Response truncated, attempting repair...")
+        result = result.strip()
+        if result.count('{') > result.count('}'):
+            result += '}' * (result.count('{') - result.count('}'))
+
+    data = safe_json(result)
+
+    for field in ['scenario', 'question', 'choices', 'correct', 'choice_ratings']:
+        if field not in data:
+            raise ValueError(f"Missing field: {field}")
+
+    if 'educational_note' not in data:
+        data['educational_note'] = f"Scientific decision-making is critical in {theme}."
+
+    random.shuffle(data['choices'])
+    return data
+
+
+@app.route('/api/question', methods=['POST'])
+def get_question():
+    body = request.json
+    virus_data = body.get('virus_data', {})
+    day = body.get('day', 1)
+    question_num = body.get('question_num', 1)
+    history = body.get('history', [])
+
     try:
-        result = call_openai(prompt, max_tokens=2500)
-        
-        # Handle truncation
-        if not result.strip().endswith('}'):
-            print("⚠️ Response truncated, attempting repair...")
-            result = result.strip()
-            if result.count('{') > result.count('}'):
-                missing = result.count('{') - result.count('}')
-                result += '}' * missing
-        
-        data = safe_json(result)
-        
-        # Validate required fields
-        required = ['scenario', 'question', 'choices', 'correct', 'choice_ratings']
-        for field in required:
-            if field not in data:
-                raise ValueError(f"Missing field: {field}")
-        
-        # Add educational note if missing
-        if 'educational_note' not in data:
-            data['educational_note'] = f"Scientific decision-making is critical in {theme}."
-        
+        data = generate_single_question(virus_data, day, question_num, history)
         return jsonify({"success": True, "data": data})
-        
     except Exception as e:
-        print(f" Error in get_question: {e}")
-        
-        fallback = {
-            "scenario": f"Day {day}: A critical situation has emerged related to {theme}. Your team needs immediate direction on how to proceed.",
-            "question": "What action should you take?",
-            "choices": [
-                {"id": "A", "text": "Implement aggressive containment measures immediately"},
-                {"id": "B", "text": "Gather more epidemiological data before acting"},
-                {"id": "C", "text": "Follow established public health protocols"},
-                {"id": "D", "text": "Coordinate with international health organizations"}
-            ],
-            "correct": "C",
-            "choice_ratings": {"A": "good", "B": "good", "C": "excellent", "D": "good"},
-            "educational_note": f"Evidence-based protocols are essential in {theme}."
-        }
-        return jsonify({"success": True, "data": fallback})
+        print(f"Error in get_question: {e}")
+        return jsonify({"success": True, "data": build_question_fallback(day)})
+
+
+@app.route('/api/day_questions', methods=['POST'])
+def get_day_questions():
+    """Generate all 3 questions for a day in parallel to eliminate per-question delays."""
+    body = request.json
+    virus_data = body.get('virus_data', {})
+    day = body.get('day', 1)
+    history = body.get('history', [])
+
+    def fetch(q_num):
+        try:
+            return q_num, generate_single_question(virus_data, day, q_num, history)
+        except Exception as e:
+            print(f"❌ Error generating Q{q_num} for Day {day}: {e}")
+            return q_num, build_question_fallback(day)
+
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        results = dict(executor.map(lambda q: fetch(q), [1, 2]))
+
+    print(f"✅ Pre-generated all 2 questions for Day {day}")
+    return jsonify({"success": True, "data": {
+        "q1": results[1], "q2": results[2]
+    }})
 
 
 @app.route('/api/feedback', methods=['POST'])
