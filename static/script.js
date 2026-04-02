@@ -496,6 +496,55 @@ async function sendChatMessage() {
   }
 }
 
+// ── Mic / Speech Recognition ──────────────────────────────
+let micRecognition = null;
+let micListening = false;
+
+function toggleMic() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    alert('Speech recognition is not supported in your browser. Try Chrome or Edge.');
+    return;
+  }
+
+  if (micListening) {
+    micRecognition.stop();
+    return;
+  }
+
+  micRecognition = new SpeechRecognition();
+  micRecognition.lang = 'en-US';
+  micRecognition.interimResults = false;
+  micRecognition.maxAlternatives = 1;
+
+  micRecognition.onstart = () => {
+    micListening = true;
+    document.getElementById('chat-mic-btn').classList.add('listening');
+    document.getElementById('chat-input').placeholder = 'Listening...';
+  };
+
+  micRecognition.onresult = (event) => {
+    const transcript = event.results[0][0].transcript;
+    document.getElementById('chat-input').value = transcript;
+    sendChatMessage();
+  };
+
+  micRecognition.onerror = (event) => {
+    console.error('Speech recognition error:', event.error);
+    if (event.error === 'not-allowed') {
+      alert('Microphone access was denied. Please allow microphone access in your browser settings.');
+    }
+  };
+
+  micRecognition.onend = () => {
+    micListening = false;
+    document.getElementById('chat-mic-btn').classList.remove('listening');
+    document.getElementById('chat-input').placeholder = 'Ask about biology or your current outbreak...';
+  };
+
+  micRecognition.start();
+}
+
 function startChatDrag(event) {
   const popup = document.getElementById('chat-popup');
   if (!popup.classList.contains('open')) return;

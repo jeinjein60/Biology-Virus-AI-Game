@@ -833,6 +833,35 @@
     color: #783C3C;
   }
 
+  .chat-mic {
+    width: 35px;
+    height: 35px;
+    background: #000000;
+    border: 1px solid #783C3C;
+    color: #783C3C;
+    cursor: pointer;
+    font-size: 0.9rem;
+    transition: all 0.3s;
+    flex-shrink: 0;
+  }
+
+  .chat-mic:hover {
+    background: #783C3C;
+    color: #FFFFFF;
+  }
+
+  @keyframes mic-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(187, 123, 123, 0.6); }
+    50%       { box-shadow: 0 0 0 6px rgba(220, 60, 60, 0); }
+  }
+
+  .chat-mic.listening {
+    background: #c88282;
+    border-color: #c88282;
+    color: #FFFFFF;
+    animation: mic-pulse 1s ease-in-out infinite;
+  }
+
   .chat-popup {
     position: fixed;
     top: 110px;
@@ -1097,17 +1126,6 @@
     animation: fadeIn 0.3s ease;
   }
 
-  /* .feedback-header {
-    background-image: url('/static/.png');
-    background-size: 100% 100%;
-    background-repeat: no-repeat;
-    background-color: transparent;
-    border: none;
-    padding: 25px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-  } */
 
   .feedback-result {
     font-family: var(--display);
@@ -1574,6 +1592,7 @@
     </div>
     <div class="chat-input-container">
       <input type="text" class="chat-input" placeholder="Ask about biology or your current outbreak..." id="chat-input">
+      <button class="chat-mic" id="chat-mic-btn" onclick="toggleMic()" type="button" title="Ask with microphone">🎤︎︎</button>
       <button class="chat-send" onclick="sendChatMessage()" type="button">▶</button>
     </div>
   </div>

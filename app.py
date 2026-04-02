@@ -230,7 +230,16 @@ Return ONLY this JSON:
     if 'educational_note' not in data:
         data['educational_note'] = f"Scientific decision-making is critical in {theme}."
 
+    # Shuffle the texts but keep labels A-B-C-D fixed in order
     random.shuffle(data['choices'])
+    labels = ['A', 'B', 'C', 'D']
+    old_to_new = {}
+    for i, choice in enumerate(data['choices']):
+        old_to_new[choice['id']] = labels[i]
+        choice['id'] = labels[i]
+    data['correct'] = old_to_new[data['correct']]
+    data['choice_ratings'] = {old_to_new[k]: v for k, v in data['choice_ratings'].items()}
+
     return data
 
 
