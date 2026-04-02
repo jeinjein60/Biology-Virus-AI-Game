@@ -8,6 +8,12 @@ __pycache__/
 # Virtual environments (if you use one)
 .env/
 
+# Build output
+dist/
+
+# Dependencies
+node_modules/
+
 # OS files
 .DS_Store
 
