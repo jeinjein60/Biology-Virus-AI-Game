@@ -10,13 +10,24 @@ You generate scientifically accurate, engaging content about virology and epidem
 Always respond with valid JSON only — no markdown, no code fences, no extra text outside the JSON.`;
 
 const DAY_THEMES = {
-  1: "Initial outbreak detection and rapid diagnostic testing",
+  1: "Starting outbreak detection, early response, and epidemiological investigation",
   2: "Quarantine strategies and isolation protocols",
-  3: "Clinical treatment approaches, hospital capacity planning, and triage systems",
+  3: "Clinical treatment approaches, hospital capacity planning, and healthcare worker safety",
   4: "Public health communication, media management, and ethical dilemmas",
-  5: "Resource mobilization, international cooperation, and supply chain logistics",
-  6: "Addressing complications: mutations, secondary infections, and system strain",
-  7: "Final containment measures and outbreak resolution"
+  5: "Resource mobilization and international cooperation",
+  6: "Vaccine development, distribution logistics, and public compliance",
+  7: "Final containment measures. Reflect on the overall outbreak response and lessons learned"
+};
+
+// create sub topics to prevent repetition
+const DAY_SUBTOPICS = {
+  1: ["Field symptom detection and initial case reporting", "Laboratory diagnostics and pathogen identification", "Epidemiological tracing and source investigation"],
+  2: ["Individual patient isolation and quarantine facilities", "Contact tracing methodology and exposure mapping", "Border controls, travel restrictions, and community quarantine"],
+  3: ["Emergency triage systems and hospital surge capacity", "Antiviral and supportive treatment protocols", "Healthcare worker PPE, safety, and infection prevention"],
+  4: ["Crafting clear public health messaging to prevent panic", "Managing media coverage and combating misinformation", "Ethical dilemmas: individual rights vs. public safety"],
+  5: ["Medical supply chains and equipment procurement", "Requesting and coordinating international aid", "Allocating limited resources fairly across regions"],
+  6: ["Responding to a new viral mutation or variant", "Managing secondary infections and co-morbidities", "Healthcare system strain and staff burnout mitigation"],
+  7: ["Final large-scale containment and case closure", "Evaluating overall outbreak response effectiveness", "Post-outbreak recovery and prevention for the future"]
 };
 
 // ── JSON repair (ported from Python backend) ──
@@ -52,9 +63,15 @@ function safeJson(text) {
 // ── AI proxy call ──
 
 async function callAI(prompt, maxTokens = 2000) {
-  const res = await fetch('/api/ai/openai', {
+  const apiKey = __OPENAI_API_KEY__;
+  if (!apiKey) throw new Error('VITE_OPENAI_API_KEY is not set in .env');
+
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${apiKey}`
+    },
     body: JSON.stringify({
       model: AI_MODEL,
       messages: [
@@ -105,43 +122,42 @@ Return ONLY this JSON (no extra text):
 }
 
 function buildQuestionPrompt(virusData, day, questionNum, history) {
-  let recentContext = '';
-  if (history.length > 0) {
-    const recent = history.slice(-2);
-    recentContext = '\nRecent decisions: ' + recent.map(
-      h => `Day ${h.day} Q${h.q}: chose option ${h.choice}`
-    ).join('; ');
-  }
-
   const theme = DAY_THEMES[day] || 'outbreak response';
+  const subtopic = (DAY_SUBTOPICS[day] || [])[questionNum - 1] || theme;
 
-  return `Generate question ${questionNum} of 2 for Day ${day} of the 7-day outbreak simulation.
+  const usedTopics = history.length > 0
+    ? '\nALREADY COVERED — do NOT repeat these topics or scenarios:\n' +
+      history.map(h => `- Day ${h.day} Q${h.q}: ${h.question_text || h.choice}`).join('\n')
+    : '';
+
+  return `Generate question ${questionNum} of 3 for Day ${day} of a 7-day virus outbreak simulation.
 
 OUTBREAK CONTEXT:
-- Virus: ${virusData.virus_name || 'Unknown'}
-- Based on: ${virusData.real_virus || 'Unknown'}
+- Virus: ${virusData.virus_name || 'Unknown'} (inspired by ${virusData.real_virus || 'Unknown'})
 - Transmission: ${virusData.transmission || 'Unknown'}
 - Location: ${virusData.location || 'Unknown'}
-- Day ${day} Theme: ${theme}
-${recentContext}
+- Day ${day} broad theme: ${theme}
+- THIS question's specific focus: ${subtopic}
+${usedTopics}
 
 INSTRUCTIONS:
-1. Create a SHORT scenario (1-2 sentences, max 15 words total)
-2. Keep the question direct and clear
-3. Provide 4 distinct choices (A, B, C, D) - each 10-15 words max
-4. VARY which choice is correct - don't always pick A or B
-5. Rate each choice: "excellent", "good", "poor", or "terrible"
-6. Include one brief science fact (under 20 words)
+1. Write a scenario SPECIFIC to "${subtopic}" — not the broad day theme
+2. The question must ask about a real epidemiological decision related to that subtopic
+3. Provide 4 meaningfully different choices (A–D), each 15–20 words
+4. Make choices represent genuinely different scientific strategies, not paraphrases of each other
+5. VARY the correct answer — do not always make A or B correct
+6. Rate each choice: "excellent", "good", "poor", or "terrible"
+7. The educational_note must teach a specific biology or epidemiology fact tied to "${subtopic}"
 
 Return ONLY this JSON:
 {
-  "scenario": "1-2 short sentences about ${theme} (max 25 words total)",
-  "question": "What is your decision?",
+  "scenario": "2 sentences describing a specific crisis moment related to ${subtopic} (max 30 words)",
+  "question": "A specific decision question about ${subtopic}",
   "choices": [
-    {"id": "A", "text": "Brief strategy A (10-15 words)"},
-    {"id": "B", "text": "Brief strategy B (10-15 words)"},
-    {"id": "C", "text": "Brief strategy C (10-15 words)"},
-    {"id": "D", "text": "Brief strategy D (10-15 words)"}
+    {"id": "A", "text": "Specific strategy A (15-20 words)"},
+    {"id": "B", "text": "Specific strategy B (15-20 words)"},
+    {"id": "C", "text": "Specific strategy C (15-20 words)"},
+    {"id": "D", "text": "Specific strategy D (15-20 words)"}
   ],
   "correct": "A or B or C or D",
   "choice_ratings": {
@@ -150,7 +166,7 @@ Return ONLY this JSON:
     "C": "excellent or good or poor or terrible",
     "D": "excellent or good or poor or terrible"
   },
-  "educational_note": "One brief science fact (under 20 words)"
+  "educational_note": "One specific biology/epidemiology fact about ${subtopic} (under 25 words)"
 }`;
 }
 

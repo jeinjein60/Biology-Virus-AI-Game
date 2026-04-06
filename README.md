@@ -1,15 +1,15 @@
-# ☣ OUTBREAK RESPONSE
+# ☣ Biology Virus Outbreak Simulator
+
 ### Biology Education Simulation Game — Viral Containment
 
-A Flask + AI-powered browser game where students play as a scientist racing to contain a randomly generated virus outbreak over 7 days.
-
-**NOW USING GOOGLE GEMINI API — 100% FREE!** ✨
+An AI-powered browser game where students play as a scientist racing to contain a randomly generated virus outbreak over 7 days.
 
 ---
 
 ## 🎮 How to Play
+
 - You are a scientist given **7 days** to contain a viral outbreak
-- Each day has **5 questions** with **4 answer choices**
+- Each day has **2 questions** with **4 answer choices**
 - Every decision is based on real epidemiology and virology
 - Your **Containment Score** (0-100) tracks your progress
 - Score **≥ 60** = Outbreak Contained! | Score **< 60** = Pandemic Spreads
@@ -20,63 +20,80 @@ A Flask + AI-powered browser game where students play as a scientist racing to c
 ## 🚀 Setup Instructions
 
 ### 1. Prerequisites
-- Python 3.9+
-- A **Google Gemini API key** (100% FREE — see below)
 
-### 2. Get Your FREE Google Gemini API Key
-1. Go to **https://aistudio.google.com/app/apikey**
-2. Sign in with your Google account
-3. Click **"Create API Key"**
-4. Copy your key (starts with `AIza...`)
+- **Node.js** 18+ — [nodejs.org](https://nodejs.org)
+- A paid **OpenAI API Key** — [platform.openai.com](https://platform.openai.com)
 
-**Free Tier:** 15 requests/minute, 1500 requests/day — perfect for a classroom!
+### 2. Clone the Repository
+
+```bash
+git clone <your-repo-url>
+cd Biology-Virus-AI-Game
+```
 
 ### 3. Install Dependencies
+
 ```bash
-pip install -r requirements.txt
+npm install
 ```
 
 ### 4. Set Your API Key
-**macOS / Linux:**
-```bash
-export GEMINI_API_KEY="AIza-your-key-here"
+
+Create a `.env` file in the project root:
+
+```env
+OPENAI_API_KEY=your-key-here
 ```
 
-**Windows (Command Prompt):**
-```cmd
-set GEMINI_API_KEY=AIza-your-key-here
-```
-
-**Windows (PowerShell):**
-```powershell
-$env:GEMINI_API_KEY="AIza-your-key-here"
-```
+> **Never commit your `.env` file.** It is already listed in `.gitignore`.
 
 ### 5. Run the Game
+
 ```bash
-python app.py
+npm run dev
 ```
 
-Open your browser to: **http://localhost:5000**
+Open your browser to: **http://localhost:5173**
+
+### Other Useful Commands
+
+| Command | Description |
+| --- | --- |
+| `npm run dev` | Start local dev server |
+| `npm run build` | Build for production (outputs to `dist/`) |
+| `npm run preview` | Preview the production build locally |
 
 ---
 
 ## 📁 File Structure
+
 ```
-outbreak_game/
-├── app.py                  ← Flask backend + Gemini AI logic
-├── requirements.txt        ← Python dependencies
-├── README.md               ← This file
-└── static/
-    └── script.js
-└── templates/
-    └── index.html          ← Full game frontend (HTML/CSS/JS)
+Biology-Virus-AI-Game/
+├── index.html          # Main game UI — all screens and modals are defined here
+├── vite.config.js      # Vite build config (sets base path from game.json)
+├── package.json        # Project metadata and npm scripts
+├── .env                # Your OpenAI API key (never commit this)
+├── .gitignore
+│
+├── public/
+│   ├── script.js       # Core game logic: state, screen navigation, scoring
+│   ├── ai.js           # OpenAI integration: prompt building, JSON parsing
+│   ├── bg.png          # Background image
+│   ├── game-main-box.png
+│   ├── info-panel.png
+│   ├── redV.png        # Virus icon
+│   └── rotateIcon.png  # Rotate-device prompt icon
+│
+└── data/
+    ├── game.json       # Game metadata: id, title, tags, description
+    └── thumbnail.png   # Preview image for the game catalog
 ```
 
 ---
 
 ## 🧬 Educational Features
-- **35 AI-generated questions** per game (5 questions × 7 days)
+
+- **14 AI-generated questions** per game (2 questions × 7 days)
 - Questions cover: detection, quarantine, treatment, communication, resource allocation
 - Every question includes a **real biology fact**
 - Final screen includes a full **Real-World Virus Profile** on the inspiring pathogen
@@ -85,26 +102,42 @@ outbreak_game/
 ---
 
 ## 🎓 Classroom Use
+
 - Works best on desktop/laptop for the full command-center layout
 - Each game generates a **unique randomized virus** — no two games are alike
 - Students can play multiple times to explore different viruses
 - The real-world science section at the end makes a great discussion starter
-- **FREE API** means you can run this for your whole class without any cost!
 
 ---
 
 ## ⚙️ Customization Tips
-- To change the **win threshold**, edit line with `total_score >= 60` in `app.py`
-- To adjust **questions per day**, edit the `question_num` logic in `app.py`
-- To change the **available viruses**, edit the list in the `/api/start` prompt in `app.py`
-- To **style the game** differently, edit the `<style>` section in `templates/index.html`
+
+**Change the AI model** — open `public/ai.js` and update the `AI_MODEL` constant:
+
+```js
+const AI_MODEL = 'gpt-4o';  // upgrade for better responses, or 'gpt-4o-mini' for cheaper
+```
+
+**Add or remove viruses** — the virus pool is defined in the system prompt inside `public/ai.js`.
+Search for `SYSTEM_PROMPT` and edit the list of possible pathogens.
+
+**Edit daily themes** — each of the 7 days has a topic focus. Change them in `public/ai.js`:
+
+```js
+const DAY_THEMES = {
+  1: "Initial outbreak detection and rapid diagnostic testing",
+  2: "Quarantine strategies and isolation protocols",
+  // ... edit any day's theme here
+};
+```
+
+**Adjust questions per day or total days** — look for the day/question loop logic in `public/script.js`.
+
+**Restyle the UI** — all visuals and layout are inline in `index.html`.
+The game uses the Google Fonts **Orbitron** and **Share Tech Mono** for its cyberpunk look.
+
+**Change the win threshold** — the default passing score is 60. Search for `60` in `public/script.js` to find and update the cutoff.
 
 ---
-
-## 🆓 Why Google Gemini?
-- **Completely free** with generous rate limits
-- **Fast responses** — game loads quickly
-- **Smart AI** — generates scientifically accurate content
-- **No credit card required** to get started
 
 Enjoy your biology game! 🦠🧬
