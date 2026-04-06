@@ -1,13 +1,9 @@
 import { defineConfig, loadEnv } from 'vite';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
-const gameData = require('./data/game.json');
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   return {
-    base: env.PARENT_REPO_BUILD ? `/staticGames/${gameData['game-id']}/` : '/',
+    base: '/',
     define: {
       __OPENAI_API_KEY__: JSON.stringify(env.VITE_OPENAI_API_KEY),
     },
