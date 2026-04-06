@@ -63,7 +63,7 @@ function safeJson(text) {
 // ── AI proxy call ──
 
 async function callAI(prompt, maxTokens = 2000) {
-  const apiKey = __OPENAI_API_KEY__;
+  const apiKey = window.__OPENAI_API_KEY__;
   if (!apiKey) throw new Error('VITE_OPENAI_API_KEY is not set in .env');
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
