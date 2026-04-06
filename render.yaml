@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: biology-virus-game
+    runtime: static
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_OPENAI_API_KEY
+        sync: false
+      - key: STANDALONE_DEPLOY
+        value: "true"
