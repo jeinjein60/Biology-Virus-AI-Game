@@ -124,7 +124,7 @@ function updateDots() {
     dot.className = 'day-dot ' + (d < state.day ? 'done' : d === state.day ? 'current' : '');
   }
 
-  for (let q = 1; q <= 2; q++) {
+  for (let q = 1; q <= 3; q++) {
     const dot = document.getElementById('q-dot-' + q);
     if (!dot) continue;
     dot.className = 'q-dot ' + (q < state.questionNum ? 'done' : q === state.questionNum ? 'current' : '');
@@ -149,10 +149,11 @@ function prefetchDayQuestions() {
   state.dayQuestions = null;
   state.dayQuestionsFetching = Promise.all([
     generateSingleQuestion(state.virusData, state.day, 1, state.history).catch(() => buildQuestionFallback(state.day)),
-    generateSingleQuestion(state.virusData, state.day, 2, state.history).catch(() => buildQuestionFallback(state.day))
-  ]).then(([q1, q2]) => {
-    state.dayQuestions = { q1, q2 };
-    console.log(`✅ Pre-fetched all 2 questions for Day ${state.day}`);
+    generateSingleQuestion(state.virusData, state.day, 2, state.history).catch(() => buildQuestionFallback(state.day)),
+    generateSingleQuestion(state.virusData, state.day, 3, state.history).catch(() => buildQuestionFallback(state.day))
+  ]).then(([q1, q2, q3]) => {
+    state.dayQuestions = { q1, q2, q3};
+    console.log(`✅ Pre-fetched all 3 questions for Day ${state.day}`);
     state.dayQuestionsFetching = null;
   }).catch(err => {
     console.error('Prefetch failed:', err);
@@ -192,7 +193,7 @@ async function loadQuestion() {
 
 function renderQuestion(data) {
   document.getElementById('question-header').textContent =
-    `DAY ${state.day} — QUESTION ${state.questionNum} OF 2`;
+    `DAY ${state.day} — QUESTION ${state.questionNum} OF 3`;
   document.getElementById('scenario-text').textContent = data.scenario;
   document.getElementById('question-text').textContent = data.question;
   document.getElementById('edu-note').textContent = data.educational_note;
@@ -251,6 +252,7 @@ async function getFeedback(choiceId, choiceText) {
       q: state.questionNum,
       choice: choiceId,
       choice_text: choiceText,
+      question_text: state.currentQuestion?.question || '',
       score_change: baseScore,
       rating: rating
     });
@@ -272,7 +274,8 @@ async function getFeedback(choiceId, choiceText) {
     updateScore(state.score + baseScore);
     state.history.push({
       day: state.day, q: state.questionNum, choice: choiceId,
-      choice_text: choiceText, score_change: baseScore, rating: rating
+      choice_text: choiceText, question_text: state.currentQuestion?.question || '',
+      score_change: baseScore, rating: rating
     });
 
     const feedbackText = {
@@ -300,14 +303,14 @@ async function getFeedback(choiceId, choiceText) {
 function dismissFeedback() {
   document.getElementById('feedback-modal').classList.remove('open');
 
-  const isLastQuestion = (state.day === 7 && state.questionNum === 2);
+  const isLastQuestion = (state.day === 7 && state.questionNum === 3);
 
   if (isLastQuestion) {
     showGameOver();
     return;
   }
 
-  if (state.questionNum === 2) {
+  if (state.questionNum === 3) {
     const nextDay = state.day + 1;
     state.day = nextDay;
     state.questionNum = 1;
