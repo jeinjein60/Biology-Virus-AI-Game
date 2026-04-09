@@ -63,15 +63,9 @@ function safeJson(text) {
 // ── AI proxy call ──
 
 async function callAI(prompt, maxTokens = 2000) {
-  const apiKey = __OPENAI_API_KEY__;
-  if (!apiKey) throw new Error('VITE_OPENAI_API_KEY is not set in .env');
-
-  const res = await fetch('https://api.openai.com/v1/chat/completions', {
+  const res = await fetch('/api/ai/openai', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${apiKey}`
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: AI_MODEL,
       messages: [
@@ -84,6 +78,7 @@ async function callAI(prompt, maxTokens = 2000) {
   });
 
   const data = await res.json();
+  if (data.error) throw new Error(data.error);
 
   const text = data.choices?.[0]?.message?.content;
   if (!text) throw new Error('Empty response from AI');
