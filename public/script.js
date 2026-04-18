@@ -1,7 +1,9 @@
+import { callAI, buildStartPrompt, buildFeedbackPrompt, buildEndPrompt, buildChatPrompt, buildQuestionFallback, generateSingleQuestion } from './ai.js';
+
 // ══════════════════════════════════════════════════════
 // GAME STATE
 // ══════════════════════════════════════════════════════
-let state = {
+export let state = {
   phase: 'landing',
   virusData: null,
   day: 1,
@@ -24,28 +26,28 @@ const chatUiState = {
 // ══════════════════════════════════════════════════════
 // UTILITY FUNCTIONS
 // ══════════════════════════════════════════════════════
-function showScreen(id) {
+export function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById('screen-' + id).classList.add('active');
 }
 
-function openHowToPlay() {
+export function openHowToPlay() {
   document.getElementById('how-to-play-modal').classList.add('open');
 }
 
-function closeHowToPlay() {
+export function closeHowToPlay() {
   document.getElementById('how-to-play-modal').classList.remove('open');
 }
 
-function openBriefing() {
+export function openBriefing() {
   document.getElementById('briefing-modal').classList.add('open');
 }
 
-function closeBriefing() {
+export function closeBriefing() {
   document.getElementById('briefing-modal').classList.remove('open');
 }
 
-function populateBriefing(virusData) {
+export function populateBriefing(virusData) {
   document.getElementById('briefing-virus-name').textContent = virusData.virus_name.toUpperCase();
   document.getElementById('briefing-scenario').textContent = virusData.scenario;
   document.getElementById('briefing-classification').textContent = virusData.classification;
@@ -58,7 +60,7 @@ function populateBriefing(virusData) {
   document.getElementById('briefing-mission').textContent = virusData.day1_briefing;
 }
 
-function startGameFromBriefing() {
+export function startGameFromBriefing() {
   closeBriefing();
   populateSidebar();
   initDayDots();
@@ -67,7 +69,7 @@ function startGameFromBriefing() {
   loadQuestion();
 }
 
-function updateScore(newScore) {
+export function updateScore(newScore) {
   state.score = Math.max(0, Math.min(100, newScore));
   document.getElementById('sidebar-score').textContent = state.score;
 }
@@ -75,7 +77,7 @@ function updateScore(newScore) {
 // ══════════════════════════════════════════════════════
 // GAME FLOW
 // ══════════════════════════════════════════════════════
-async function startGame() {
+export async function startGame() {
   showScreen('loading');
 
   try {
@@ -92,14 +94,14 @@ async function startGame() {
   }
 }
 
-function populateSidebar() {
+export function populateSidebar() {
   const v = state.virusData;
   document.getElementById('tip-symptoms').textContent = v.symptoms.join(', ');
   document.getElementById('tip-transmission').textContent = v.transmission;
   document.getElementById('tip-mortality').textContent = v.mortality_rate;
 }
 
-function initDayDots() {
+export function initDayDots() {
   const dayContainer = document.getElementById('day-dots');
   const dayDots = dayContainer.querySelectorAll('.day-dot');
   dayDots.forEach((dot, i) => {
@@ -115,7 +117,7 @@ function initDayDots() {
   });
 }
 
-function updateDots() {
+export function updateDots() {
   document.getElementById('sidebar-day').textContent = state.day;
 
   for (let d = 1; d <= 7; d++) {
@@ -131,21 +133,7 @@ function updateDots() {
   }
 }
 
-async function generateSingleQuestion(virusData, day, questionNum, history) {
-  const prompt = buildQuestionPrompt(virusData, day, questionNum, history);
-  const data = await callAI(prompt, 2500);
-
-  for (const field of ['scenario', 'question', 'choices', 'correct', 'choice_ratings']) {
-    if (!(field in data)) throw new Error('Missing field: ' + field);
-  }
-  if (!data.educational_note) {
-    data.educational_note = `Scientific decision-making is critical in ${DAY_THEMES[day] || 'outbreak response'}.`;
-  }
-
-  return shuffleChoices(data);
-}
-
-function prefetchDayQuestions() {
+export function prefetchDayQuestions() {
   state.dayQuestions = null;
   state.dayQuestionsFetching = Promise.all([
     generateSingleQuestion(state.virusData, state.day, 1, state.history).catch(() => buildQuestionFallback(state.day)),
@@ -161,7 +149,7 @@ function prefetchDayQuestions() {
   });
 }
 
-async function loadQuestion() {
+export async function loadQuestion() {
   document.getElementById('question-loading').style.display = 'block';
   document.getElementById('question-content').style.display = 'none';
   updateDots();
@@ -178,20 +166,18 @@ async function loadQuestion() {
       return;
     }
 
-    // Fallback: generate individually if cache missed
     const data = await generateSingleQuestion(state.virusData, state.day, state.questionNum, state.history);
     state.currentQuestion = data;
     renderQuestion(data);
   } catch (e) {
     console.error(e);
-    // Use fallback
     const fallback = buildQuestionFallback(state.day);
     state.currentQuestion = fallback;
     renderQuestion(fallback);
   }
 }
 
-function renderQuestion(data) {
+export function renderQuestion(data) {
   document.getElementById('question-header').textContent =
     `DAY ${state.day} — QUESTION ${state.questionNum} OF 3`;
   document.getElementById('scenario-text').textContent = data.scenario;
@@ -217,7 +203,7 @@ function renderQuestion(data) {
   state.selectedChoice = null;
 }
 
-function selectChoice(choiceId, boxEl) {
+export function selectChoice(choiceId, boxEl) {
   if (state.selectedChoice) return;
 
   state.selectedChoice = choiceId;
@@ -233,7 +219,7 @@ function selectChoice(choiceId, boxEl) {
   getFeedback(choiceId, choiceText);
 }
 
-async function getFeedback(choiceId, choiceText) {
+export async function getFeedback(choiceId, choiceText) {
   const scoreMap = { excellent: 10, good: 8, poor: -8, terrible: -10 };
   const rating = (state.currentQuestion.choice_ratings || {})[choiceId] || 'poor';
   const baseScore = scoreMap[rating] || 0;
@@ -241,7 +227,6 @@ async function getFeedback(choiceId, choiceText) {
   try {
     const data = await callAI(buildFeedbackPrompt(choiceId, rating, state.currentQuestion), 800);
 
-    // Override score_change and result to match our calculation
     data.score_change = baseScore;
     data.result = rating.toUpperCase();
 
@@ -270,7 +255,6 @@ async function getFeedback(choiceId, choiceText) {
   } catch (e) {
     console.error(e);
 
-    // Fallback
     updateScore(state.score + baseScore);
     state.history.push({
       day: state.day, q: state.questionNum, choice: choiceId,
@@ -300,7 +284,7 @@ async function getFeedback(choiceId, choiceText) {
   }
 }
 
-function dismissFeedback() {
+export function dismissFeedback() {
   document.getElementById('feedback-modal').classList.remove('open');
 
   const isLastQuestion = (state.day === 7 && state.questionNum === 3);
@@ -326,14 +310,14 @@ function dismissFeedback() {
   }
 }
 
-function continueAfterTransition() {
+export function continueAfterTransition() {
   initDayDots();
   showScreen('game');
   prefetchDayQuestions();
   loadQuestion();
 }
 
-async function showGameOver() {
+export async function showGameOver() {
   showScreen('game-over');
 
   const outcome = state.score >= 60 ? 'OUTBREAK CONTAINED' : 'OUTBREAK FAILED';
@@ -380,14 +364,13 @@ async function showGameOver() {
     document.getElementById('gameover-content').style.display = 'block';
   } catch (e) {
     console.error(e);
-    // Show basic fallback
     document.getElementById('eval-text').textContent = 'Your response to the outbreak has concluded.';
     document.getElementById('gameover-loading').style.display = 'none';
     document.getElementById('gameover-content').style.display = 'block';
   }
 }
 
-function restartGame() {
+export function restartGame() {
   state = {
     phase: 'landing',
     virusData: null,
@@ -410,20 +393,20 @@ function restartGame() {
 // ══════════════════════════════════════════════════════
 // CHAT
 // ══════════════════════════════════════════════════════
-function openChatPopup() {
+export function openChatPopup() {
   const popup = document.getElementById('chat-popup');
   popup.classList.add('open');
   popup.setAttribute('aria-hidden', 'false');
   document.getElementById('chat-input').focus();
 }
 
-function closeChatPopup() {
+export function closeChatPopup() {
   const popup = document.getElementById('chat-popup');
   popup.classList.remove('open');
   popup.setAttribute('aria-hidden', 'true');
 }
 
-function resetChatPopupPosition() {
+export function resetChatPopupPosition() {
   const popup = document.getElementById('chat-popup');
   popup.style.left = '';
   popup.style.top = '';
@@ -431,7 +414,7 @@ function resetChatPopupPosition() {
   popup.style.bottom = '';
 }
 
-function renderChatMessages() {
+export function renderChatMessages() {
   const container = document.getElementById('chat-messages');
   const emptyState = document.getElementById('chat-empty-state');
   if (!container || !emptyState) return;
@@ -458,12 +441,12 @@ function renderChatMessages() {
   container.scrollTop = container.scrollHeight;
 }
 
-function addChatMessage(role, text) {
+export function addChatMessage(role, text) {
   state.chatHistory.push({ role, text });
   renderChatMessages();
 }
 
-function getChatContext() {
+export function getChatContext() {
   if (!state.virusData) {
     return {
       day: state.day,
@@ -487,7 +470,7 @@ function getChatContext() {
   };
 }
 
-async function sendChatMessage() {
+export async function sendChatMessage() {
   const input = document.getElementById('chat-input');
   const button = document.querySelector('#chat-popup .chat-send');
   const message = input.value.trim();
@@ -516,7 +499,7 @@ async function sendChatMessage() {
 let micRecognition = null;
 let micListening = false;
 
-function toggleMic() {
+export function toggleMic() {
   const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SpeechRecognition) {
     alert('Speech recognition is not supported in your browser. Try Chrome or Edge.');
@@ -562,7 +545,7 @@ function toggleMic() {
 }
 
 // ── Chat Drag ──
-function startChatDrag(event) {
+export function startChatDrag(event) {
   const popup = document.getElementById('chat-popup');
   if (!popup.classList.contains('open')) return;
   if (window.innerWidth <= 900) return;
@@ -578,7 +561,7 @@ function startChatDrag(event) {
   popup.style.bottom = 'auto';
 }
 
-function onChatDrag(event) {
+export function onChatDrag(event) {
   if (!chatUiState.dragging) return;
 
   const popup = document.getElementById('chat-popup');
@@ -591,11 +574,11 @@ function onChatDrag(event) {
   popup.style.top = `${nextTop}px`;
 }
 
-function stopChatDrag() {
+export function stopChatDrag() {
   chatUiState.dragging = false;
 }
 
-function initChatPopup() {
+export function initChatPopup() {
   const input = document.getElementById('chat-input');
   const header = document.getElementById('chat-popup-header');
 
@@ -623,4 +606,16 @@ function initChatPopup() {
   renderChatMessages();
 }
 
-document.addEventListener('DOMContentLoaded', initChatPopup);
+if (typeof document !== 'undefined') {
+  document.addEventListener('DOMContentLoaded', initChatPopup);
+}
+
+// Expose functions as browser globals for onclick handlers in HTML
+if (typeof window !== 'undefined') {
+  Object.assign(window, {
+    startGame, startGameFromBriefing, dismissFeedback, continueAfterTransition,
+    restartGame, selectChoice, sendChatMessage, toggleMic,
+    openChatPopup, closeChatPopup, openBriefing, closeBriefing,
+    openHowToPlay, closeHowToPlay, startChatDrag, onChatDrag, stopChatDrag
+  });
+}
