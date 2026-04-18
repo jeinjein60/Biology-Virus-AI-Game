@@ -43,7 +43,7 @@ describe('All Pages / Screens Load', () => {
 
   test('all screens use the shared .screen class', () => {
     const matches = html.match(/class="screen/g) ?? [];
-    // at least 5 screens (landing, loading, day-transition, game, game-over)
+    // numeber of pages 
     expect(matches.length).toBeGreaterThanOrEqual(5);
   });
 

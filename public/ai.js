@@ -3,13 +3,13 @@
 // Loaded before script.js — all functions are global.
 // ══════════════════════════════════════════════════════
 
-const AI_MODEL = 'gpt-4o-mini';
+export const AI_MODEL = 'gpt-4o-mini';
 
 const SYSTEM_PROMPT = `You are the AI director for OUTBREAK RESPONSE, a biology education simulation game for students.
 You generate scientifically accurate, engaging content about virology and epidemiology.
 Always respond with valid JSON only — no markdown, no code fences, no extra text outside the JSON.`;
 
-const DAY_THEMES = {
+export const DAY_THEMES = {
   1: "Starting outbreak detection, early response, and epidemiological investigation",
   2: "Quarantine strategies and isolation protocols",
   3: "Clinical treatment approaches, hospital capacity planning, and healthcare worker safety",
@@ -20,7 +20,7 @@ const DAY_THEMES = {
 };
 
 // create sub topics to prevent repetition
-const DAY_SUBTOPICS = {
+export const DAY_SUBTOPICS = {
   1: ["Field symptom detection and initial case reporting", "Laboratory diagnostics and pathogen identification", "Epidemiological tracing and source investigation"],
   2: ["Individual patient isolation and quarantine facilities", "Contact tracing methodology and exposure mapping", "Border controls, travel restrictions, and community quarantine"],
   3: ["Emergency triage systems and hospital surge capacity", "Antiviral and supportive treatment protocols", "Healthcare worker PPE, safety, and infection prevention"],
@@ -32,7 +32,7 @@ const DAY_SUBTOPICS = {
 
 // ── JSON repair (ported from Python backend) ──
 
-function repairJson(text) {
+export function repairJson(text) {
   let t = text;
   const start = t.indexOf('{');
   const end = t.lastIndexOf('}');
@@ -42,7 +42,7 @@ function repairJson(text) {
   return t;
 }
 
-function safeJson(text) {
+export function safeJson(text) {
   const attempts = [
     ['Direct', t => t],
     ['Strip markdown', t => t.replace(/```(?:json)?\s*|\s*```/g, '')],
@@ -62,7 +62,7 @@ function safeJson(text) {
 
 // ── AI proxy call ──
 
-async function callAI(prompt, maxTokens = 2000) {
+export async function callAI(prompt, maxTokens = 2000) {
   const res = await fetch('/api/ai/openai', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -95,7 +95,7 @@ async function callAI(prompt, maxTokens = 2000) {
 
 // ── Prompt builders ──
 
-function buildStartPrompt() {
+export function buildStartPrompt() {
   return `Generate a virus outbreak scenario for the game.
 Choose one real virus as inspiration from this list: Ebola, COVID-19, Influenza H1N1, Smallpox, SARS-CoV-1, Zika, Marburg, Nipah, Rabies, or Dengue Fever.
 Create a FICTIONAL virus name (dramatic, scientific-sounding, NOT the real name).
@@ -116,7 +116,7 @@ Return ONLY this JSON (no extra text):
 }`;
 }
 
-function buildQuestionPrompt(virusData, day, questionNum, history) {
+export function buildQuestionPrompt(virusData, day, questionNum, history) {
   const theme = DAY_THEMES[day] || 'outbreak response';
   const subtopic = (DAY_SUBTOPICS[day] || [])[questionNum - 1] || theme;
 
@@ -165,7 +165,7 @@ Return ONLY this JSON:
 }`;
 }
 
-function buildFeedbackPrompt(choiceId, rating, questionData) {
+export function buildFeedbackPrompt(choiceId, rating, questionData) {
   const chosen = (questionData.choices || []).find(c => c.id === choiceId);
   const correctId = questionData.correct || 'A';
 
@@ -186,7 +186,7 @@ Return ONLY this JSON:
 }`;
 }
 
-function buildEndPrompt(virusData, totalScore, history) {
+export function buildEndPrompt(virusData, totalScore, history) {
   const outcome = totalScore >= 60 ? 'CONTAINED' : 'OUTBREAK FAILED';
   const historySummary = history.map(
     h => `Day${h.day}Q${h.q}:${h.choice}(${h.rating || '?'})`
@@ -217,7 +217,7 @@ Return ONLY this JSON:
 }`;
 }
 
-function buildChatPrompt(message, context, chatHistory) {
+export function buildChatPrompt(message, context, chatHistory) {
   const historyLines = (chatHistory || []).slice(-8).map(
     item => `${(item.role || 'user').toUpperCase()}: ${(item.text || '').trim()}`
   ).filter(Boolean);
@@ -259,7 +259,7 @@ Return ONLY this JSON:
 
 // ── Fallbacks ──
 
-function buildQuestionFallback(day) {
+export function buildQuestionFallback(day) {
   const theme = DAY_THEMES[day] || 'outbreak response';
   return {
     scenario: `Day ${day}: A critical situation has emerged related to ${theme}. Your team needs immediate direction on how to proceed.`,
@@ -278,7 +278,7 @@ function buildQuestionFallback(day) {
 
 // ── Helpers ──
 
-function shuffleChoices(data) {
+export function shuffleChoices(data) {
   const shuffled = [...data.choices].sort(() => Math.random() - 0.5);
   const labels = ['A', 'B', 'C', 'D'];
   const oldToNew = {};
@@ -294,7 +294,7 @@ function shuffleChoices(data) {
   return data;
 }
 
-async function generateSingleQuestion(virusData, day, questionNum, history) {
+export async function generateSingleQuestion(virusData, day, questionNum, history) {
   const prompt = buildQuestionPrompt(virusData, day, questionNum, history);
   const data = await callAI(prompt, 2500);
 
