@@ -1,4 +1,10 @@
 import { callAI, buildStartPrompt, buildFeedbackPrompt, buildEndPrompt, buildChatPrompt, buildQuestionFallback, generateSingleQuestion } from './ai.js';
+import { initStemAssistantBridge, setStemAssistantLevel, stemAssistant } from 'stem-assistant-bridge';
+
+initStemAssistantBridge({
+  gameId: "BVoutbreak",
+  defaultTargetConcept: "virus_epidemiology"
+});
 
 // ══════════════════════════════════════════════════════
 // GAME STATE
@@ -65,6 +71,8 @@ export function startGameFromBriefing() {
   populateSidebar();
   initDayDots();
   showScreen('game');
+  setStemAssistantLevel(`day-${state.day}`, "virus_epidemiology");
+  stemAssistant.levelStart({ levelId: `day-${state.day}`, targetConcept: "virus_epidemiology" });
   prefetchDayQuestions();
   loadQuestion();
 }
@@ -290,11 +298,23 @@ export function dismissFeedback() {
   const isLastQuestion = (state.day === 7 && state.questionNum === 3);
 
   if (isLastQuestion) {
+    const levelId = `day-${state.day}`;
+    if (state.score < 60) {
+      stemAssistant.incorrect({ levelId, targetConcept: "virus_epidemiology", playerAnswer: `containment: ${state.score}` });
+    } else {
+      stemAssistant.correct({ levelId, targetConcept: "virus_epidemiology", playerAnswer: `containment: ${state.score}` });
+    }
     showGameOver();
     return;
   }
 
   if (state.questionNum === 3) {
+    const levelId = `day-${state.day}`;
+    if (state.score < 60) {
+      stemAssistant.incorrect({ levelId, targetConcept: "virus_epidemiology", playerAnswer: `containment: ${state.score}` });
+    } else {
+      stemAssistant.correct({ levelId, targetConcept: "virus_epidemiology", playerAnswer: `containment: ${state.score}` });
+    }
     const nextDay = state.day + 1;
     state.day = nextDay;
     state.questionNum = 1;
@@ -313,6 +333,8 @@ export function dismissFeedback() {
 export function continueAfterTransition() {
   initDayDots();
   showScreen('game');
+  setStemAssistantLevel(`day-${state.day}`, "virus_epidemiology");
+  stemAssistant.levelStart({ levelId: `day-${state.day}`, targetConcept: "virus_epidemiology" });
   prefetchDayQuestions();
   loadQuestion();
 }
