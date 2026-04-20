@@ -1,10 +1,14 @@
 import { callAI, buildStartPrompt, buildFeedbackPrompt, buildEndPrompt, buildChatPrompt, buildQuestionFallback, generateSingleQuestion } from './ai.js';
-import { initStemAssistantBridge, setStemAssistantLevel, stemAssistant } from 'stem-assistant-bridge';
 
-initStemAssistantBridge({
-  gameId: "BVoutbreak",
-  defaultTargetConcept: "virus_epidemiology"
-});
+// No-op fallbacks so game runs standalone if bridge package isn't available
+let setStemAssistantLevel = () => {};
+let stemAssistant = { levelStart: () => {}, correct: () => {}, incorrect: () => {} };
+
+import(/* @vite-ignore */ 'stem-assistant-bridge').then(mod => {
+  mod.initStemAssistantBridge({ gameId: "BVoutbreak", defaultTargetConcept: "virus_epidemiology" });
+  setStemAssistantLevel = mod.setStemAssistantLevel;
+  stemAssistant = mod.stemAssistant;
+}).catch(() => console.warn('[bridge] stem-assistant-bridge unavailable, running standalone'));
 
 // ══════════════════════════════════════════════════════
 // GAME STATE
