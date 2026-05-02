@@ -298,3 +298,192 @@ describe('Game Restart', () => {
     expect(document.getElementById('screen-landing').classList.contains('active')).toBe(true);
   });
 });
+
+describe('Populate Sidebar', () => {
+  test('populateSidebar fills symptoms, transmission, and mortality fields', () => {
+    script.state.virusData = {
+      symptoms: ['fever', 'cough', 'fatigue'],
+      transmission: 'Airborne droplets',
+      mortality_rate: '45%'
+    };
+    script.populateSidebar();
+    expect(document.getElementById('tip-symptoms').textContent).toBe('fever, cough, fatigue');
+    expect(document.getElementById('tip-transmission').textContent).toBe('Airborne droplets');
+    expect(document.getElementById('tip-mortality').textContent).toBe('45%');
+  });
+});
+
+describe('Update Dots', () => {
+  test('updateDots updates the sidebar day number', () => {
+    script.initDayDots();
+    script.state.day = 3;
+    script.updateDots();
+    expect(document.getElementById('sidebar-day').textContent).toBe('3');
+  });
+
+  test('updateDots marks the current day dot as current and prior days as done', () => {
+    script.initDayDots();
+    script.state.day = 2;
+    script.updateDots();
+    expect(document.getElementById('day-dot-2').className).toContain('current');
+    expect(document.getElementById('day-dot-1').className).toContain('done');
+    expect(document.getElementById('day-dot-3').className).not.toContain('done');
+    expect(document.getElementById('day-dot-3').className).not.toContain('current');
+  });
+
+  test('updateDots marks the current question dot as current', () => {
+    script.initDayDots();
+    script.state.questionNum = 2;
+    script.updateDots();
+    expect(document.getElementById('q-dot-2').className).toContain('current');
+    expect(document.getElementById('q-dot-1').className).toContain('done');
+  });
+});
+
+describe('Reset Chat Position', () => {
+  test('resetChatPopupPosition clears all position styles', () => {
+    const popup = document.getElementById('chat-popup');
+    popup.style.left = '200px';
+    popup.style.top = '100px';
+    script.resetChatPopupPosition();
+    expect(popup.style.left).toBe('');
+    expect(popup.style.top).toBe('');
+    expect(popup.style.right).toBe('');
+    expect(popup.style.bottom).toBe('');
+  });
+});
+
+describe('getChatContext with virusData', () => {
+  test('getChatContext returns virus fields when virusData is set', () => {
+    script.state.virusData = {
+      virus_name: 'NebulaVirus',
+      real_virus: 'Ebola',
+      transmission: 'Direct contact',
+      symptoms: ['fever', 'hemorrhage'],
+      location: 'Kinshasa'
+    };
+    const ctx = script.getChatContext();
+    expect(ctx.virus_name).toBe('NebulaVirus');
+    expect(ctx.real_virus).toBe('Ebola');
+    expect(ctx.transmission).toBe('Direct contact');
+    expect(ctx).toHaveProperty('current_question');
+  });
+
+  test('getChatContext includes score and day when virusData is set', () => {
+    script.state.virusData = {
+      virus_name: 'NebulaVirus', real_virus: 'Ebola',
+      transmission: 'Contact', symptoms: [], location: 'City'
+    };
+    script.updateScore(70);
+    const ctx = script.getChatContext();
+    expect(ctx.score).toBe(70);
+    expect(ctx.day).toBe(1);
+  });
+});
+
+describe('Select Choice', () => {
+  test('selectChoice sets selectedChoice in state', () => {
+    const q = {
+      scenario: 'Scenario',
+      question: 'Question?',
+      educational_note: 'Note.',
+      choices: [
+        { id: 'A', text: 'Choice A' },
+        { id: 'B', text: 'Choice B' }
+      ],
+      choice_ratings: { A: 'excellent', B: 'poor' }
+    };
+    script.renderQuestion(q);
+    script.state.currentQuestion = q;
+    const box = document.querySelector('.choice-box');
+    script.selectChoice('A', box);
+    expect(script.state.selectedChoice).toBe('A');
+  });
+
+  test('selectChoice opens the feedback modal', () => {
+    const q = {
+      scenario: 'Scenario',
+      question: 'Question?',
+      educational_note: 'Note.',
+      choices: [{ id: 'A', text: 'Choice A' }],
+      choice_ratings: { A: 'good' }
+    };
+    script.renderQuestion(q);
+    script.state.currentQuestion = q;
+    const box = document.querySelector('.choice-box');
+    script.selectChoice('A', box);
+    expect(document.getElementById('feedback-modal').classList.contains('open')).toBe(true);
+  });
+
+  test('selectChoice adds selected class to the clicked box', () => {
+    const q = {
+      scenario: 'Scenario',
+      question: 'Question?',
+      educational_note: 'Note.',
+      choices: [
+        { id: 'A', text: 'Choice A' },
+        { id: 'B', text: 'Choice B' }
+      ],
+      choice_ratings: { A: 'good', B: 'poor' }
+    };
+    script.renderQuestion(q);
+    script.state.currentQuestion = q;
+    const box = document.querySelector('.choice-box');
+    script.selectChoice('A', box);
+    expect(box.classList.contains('selected')).toBe(true);
+  });
+
+  test('selectChoice does nothing if a choice is already selected', () => {
+    const q = {
+      scenario: 'Scenario',
+      question: 'Question?',
+      educational_note: 'Note.',
+      choices: [
+        { id: 'A', text: 'Choice A' },
+        { id: 'B', text: 'Choice B' }
+      ],
+      choice_ratings: { A: 'good', B: 'poor' }
+    };
+    script.renderQuestion(q);
+    script.state.currentQuestion = q;
+    const boxes = document.querySelectorAll('.choice-box');
+    script.selectChoice('A', boxes[0]);
+    script.selectChoice('B', boxes[1]);
+    expect(script.state.selectedChoice).toBe('A');
+  });
+});
+
+describe('Dismiss Feedback', () => {
+  test('dismissFeedback closes the feedback modal', () => {
+    document.getElementById('feedback-modal').classList.add('open');
+    script.dismissFeedback();
+    expect(document.getElementById('feedback-modal').classList.contains('open')).toBe(false);
+  });
+
+  test('dismissFeedback increments questionNum when not the last question of the day', () => {
+    script.dismissFeedback();
+    expect(script.state.questionNum).toBe(2);
+  });
+
+  test('dismissFeedback shows day-transition screen when question 3 of a non-final day is answered', () => {
+    script.state.questionNum = 3;
+    script.state.day = 1;
+    script.dismissFeedback();
+    expect(document.getElementById('screen-day-transition').classList.contains('active')).toBe(true);
+  });
+
+  test('dismissFeedback advances day and resets questionNum after day transition', () => {
+    script.state.questionNum = 3;
+    script.state.day = 2;
+    script.dismissFeedback();
+    expect(script.state.day).toBe(3);
+    expect(script.state.questionNum).toBe(1);
+  });
+
+  test('dismissFeedback shows game-over screen on day 7 question 3', () => {
+    script.state.day = 7;
+    script.state.questionNum = 3;
+    script.dismissFeedback();
+    expect(document.getElementById('screen-game-over').classList.contains('active')).toBe(true);
+  });
+});

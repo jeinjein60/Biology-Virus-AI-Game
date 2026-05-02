@@ -40,9 +40,9 @@ describe('Game Runs', () => {
     expect(html).toContain('script.js');
   });
 
-  test('index.html references ai.js', () => {
-    const html = readFileSync(resolve(ROOT, 'index.html'), 'utf-8');
-    expect(html).toContain('ai.js');
+  test('script.js imports from ai.js', () => {
+    const script = readFileSync(resolve(ROOT, 'public/script.js'), 'utf-8');
+    expect(script).toContain("from './ai.js'");
   });
 
   test('script.js defines startGame', () => {
