@@ -6,7 +6,7 @@ import {
   repairJson, safeJson, shuffleChoices,
   buildStartPrompt, buildQuestionPrompt, buildFeedbackPrompt,
   buildEndPrompt, buildChatPrompt, buildQuestionFallback,
-  DAY_THEMES, callAI
+  DAY_THEMES, DAY_SUBTOPICS, callAI
 } from '../public/ai.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -139,10 +139,67 @@ describe('AI Utilities (Unit)', () => {
       expect(typeof DAY_THEMES[i]).toBe('string');
     }
   });
+
+  test('DAY_SUBTOPICS has an entry for all 7 days', () => {
+    for (let i = 1; i <= 7; i++) {
+      expect(DAY_SUBTOPICS[i]).toBeDefined();
+    }
+  });
+
+  test('DAY_SUBTOPICS each day has exactly 3 subtopics', () => {
+    for (let i = 1; i <= 7; i++) {
+      expect(DAY_SUBTOPICS[i]).toHaveLength(3);
+    }
+  });
+
+  test('repairJson returns text unchanged when no braces are present', () => {
+    const result = repairJson('no braces here');
+    expect(result).toBe('no braces here');
+  });
+
+  test('buildQuestionPrompt with history includes ALREADY COVERED section', () => {
+    const history = [{ day: 1, q: 1, question_text: 'What containment steps matter most?' }];
+    const prompt = buildQuestionPrompt(
+      { virus_name: 'TestVirus', real_virus: 'Ebola', transmission: 'air', location: 'NYC' },
+      2, 2, history
+    );
+    expect(prompt).toContain('ALREADY COVERED');
+    expect(prompt).toContain('What containment steps matter most?');
+  });
+
+  test('buildQuestionPrompt with empty history has no ALREADY COVERED section', () => {
+    const prompt = buildQuestionPrompt(
+      { virus_name: 'TestVirus', real_virus: 'Ebola', transmission: 'air', location: 'NYC' },
+      1, 1, []
+    );
+    expect(prompt).not.toContain('ALREADY COVERED');
+  });
+
+  test('buildEndPrompt marks score below 60 as OUTBREAK FAILED', () => {
+    const prompt = buildEndPrompt({ virus_name: 'X', real_virus: 'Ebola' }, 40, []);
+    expect(prompt).toContain('OUTBREAK FAILED');
+    expect(prompt).toContain('40');
+  });
+
+  test('buildChatPrompt includes chat history lines when history is provided', () => {
+    const history = [
+      { role: 'user', text: 'What is R0?' },
+      { role: 'ai', text: 'R0 is the basic reproduction number.' }
+    ];
+    const prompt = buildChatPrompt('Follow up question', { day: 2, score: 60 }, history);
+    expect(prompt).toContain('What is R0?');
+    expect(prompt).toContain('R0 is the basic reproduction number.');
+  });
+
+  test('buildChatPrompt shows no prior messages when history is empty', () => {
+    const prompt = buildChatPrompt('Hello', { day: 1, score: 50 }, []);
+    expect(prompt).toContain('No prior chat messages.');
+  });
 });
 
-describe('AI Live Response', () => {
+describe.skipIf(!API_KEY)('AI Live Response', () => {
   let responseData;
+  let responseTimeMs;
 
   beforeAll(async () => {
     // Save original fetch before stubbing, then intercept /api/ai/openai and
@@ -156,7 +213,10 @@ describe('AI Live Response', () => {
       })
     );
 
+    const start = Date.now();
     responseData = await callAI('Reply with only valid JSON: {"status":"ok"}', 20);
+    responseTimeMs = Date.now() - start;
+    console.log(`[AI latency] callAI round-trip: ${responseTimeMs}ms`);
   }, 20_000);
 
   afterAll(() => {
@@ -170,5 +230,10 @@ describe('AI Live Response', () => {
 
   test('AI response content is parseable JSON', () => {
     expect(() => JSON.stringify(responseData)).not.toThrow();
+  });
+
+  test('callAI round-trip completes within 20 s', () => {
+    console.log(`[AI latency] actual response time: ${responseTimeMs}ms`);
+    expect(responseTimeMs).toBeLessThan(20_000);
   });
 });
