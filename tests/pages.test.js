@@ -47,8 +47,11 @@ describe('All Pages / Screens Load', () => {
     expect(matches.length).toBeGreaterThanOrEqual(5);
   });
 
-  test('landing screen has a start button', () => {
-    // The start button calls startGame via onclick
-    expect(html).toContain('startGame');
+  test('landing screen start button opens how-to-play', () => {
+    expect(html).toContain('openHowToPlay');
+  });
+
+  test('how-to-play modal is present', () => {
+    expect(html).toContain('id="how-to-play-modal"');
   });
 });

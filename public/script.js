@@ -47,6 +47,9 @@ export function openHowToPlay() {
 
 export function closeHowToPlay() {
   document.getElementById('how-to-play-modal').classList.remove('open');
+  if (document.getElementById('screen-landing').classList.contains('active')) {
+    startGame();
+  }
 }
 
 export function openBriefing() {

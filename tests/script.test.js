@@ -189,9 +189,23 @@ describe('How To Play Modal', () => {
   });
 
   test('closeHowToPlay removes open class', () => {
+    script.showScreen('game');
     script.openHowToPlay();
     script.closeHowToPlay();
     expect(document.getElementById('how-to-play-modal').classList.contains('open')).toBe(false);
+  });
+
+  test('closeHowToPlay triggers startGame when closed from landing screen', () => {
+    script.openHowToPlay();
+    script.closeHowToPlay();
+    expect(document.getElementById('screen-loading').classList.contains('active')).toBe(true);
+  });
+
+  test('closeHowToPlay does not trigger startGame when closed from game screen', () => {
+    script.showScreen('game');
+    script.openHowToPlay();
+    script.closeHowToPlay();
+    expect(document.getElementById('screen-game').classList.contains('active')).toBe(true);
   });
 });
 
