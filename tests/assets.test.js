@@ -8,7 +8,6 @@ const ROOT = resolve(__dirname, '..');
 
 const PUBLIC_ASSETS = [
   'public/bg.png',
-  'public/game-main-box.png',
   'public/info-panel.png',
   'public/redV.png',
   'public/rotateIcon.png',
